@@ -1,0 +1,6 @@
+#ifndef NIN64_RESOURCE_WRAPPER_H
+#define NIN64_RESOURCE_WRAPPER_H
+
+#include "RESOURCE.H"
+
+#endif

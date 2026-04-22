@@ -1,0 +1,6 @@
+#ifndef NIN64_CONSOLE_WRAPPER_H
+#define NIN64_CONSOLE_WRAPPER_H
+
+#include "CONSOLE.H"
+
+#endif

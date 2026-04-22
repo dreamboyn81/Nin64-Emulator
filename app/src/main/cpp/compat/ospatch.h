@@ -1,0 +1,6 @@
+#ifndef NIN64_OSPATCH_WRAPPER_H
+#define NIN64_OSPATCH_WRAPPER_H
+
+#include "OSPATCH.H"
+
+#endif
