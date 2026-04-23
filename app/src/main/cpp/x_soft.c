@@ -24,6 +24,7 @@ typedef struct
     int height;
     int clamp_x;
     int clamp_y;
+    int point_sample;
     uint32_t *pixels;
 } SoftTexture;
 
@@ -52,6 +53,10 @@ typedef struct
     float viewport_y0;
     float viewport_x1;
     float viewport_y1;
+    float scissor_x0;
+    float scissor_y0;
+    float scissor_x1;
+    float scissor_y1;
     int color_mask;
     int depth_mask;
     int depth_test;
@@ -233,12 +238,62 @@ static float wrap_coord(float value)
     return value;
 }
 
-static void sample_texture(int handle, float u, float v, float *rgba)
+static int wrap_index(int value, int limit)
 {
-    SoftTexture *texture = xsoft_texture(handle);
+    if (limit <= 0) {
+        return 0;
+    }
+
+    value %= limit;
+    if (value < 0) {
+        value += limit;
+    }
+    return value;
+}
+
+static void sample_texture_texel(const SoftTexture *texture, int x, int y, float *rgba)
+{
     int tx;
     int ty;
     uint32_t pixel;
+
+    if (!texture || !texture->pixels || texture->width <= 0 || texture->height <= 0) {
+        fill_color(rgba, 1.0f, 1.0f, 1.0f, 1.0f);
+        return;
+    }
+
+    if (texture->clamp_x) {
+        tx = clampi(x, 0, texture->width - 1);
+    } else {
+        tx = wrap_index(x, texture->width);
+    }
+
+    if (texture->clamp_y) {
+        ty = clampi(y, 0, texture->height - 1);
+    } else {
+        ty = wrap_index(y, texture->height);
+    }
+
+    pixel = texture->pixels[ty * texture->width + tx];
+    unpack_color(pixel, rgba);
+}
+
+static void sample_texture(int handle, float u, float v, float *rgba)
+{
+    SoftTexture *texture = xsoft_texture(handle);
+    float tex_x;
+    float tex_y;
+    int x0;
+    int y0;
+    int x1;
+    int y1;
+    float fx;
+    float fy;
+    float c00[4];
+    float c10[4];
+    float c01[4];
+    float c11[4];
+    int i;
 
     if (!texture || !texture->pixels || texture->width <= 0 || texture->height <= 0) {
         fill_color(rgba, 1.0f, 1.0f, 1.0f, 1.0f);
@@ -257,10 +312,46 @@ static void sample_texture(int handle, float u, float v, float *rgba)
         v = wrap_coord(v);
     }
 
-    tx = clampi((int)(u * (float)(texture->width - 1) + 0.5f), 0, texture->width - 1);
-    ty = clampi((int)(v * (float)(texture->height - 1) + 0.5f), 0, texture->height - 1);
-    pixel = texture->pixels[ty * texture->width + tx];
-    unpack_color(pixel, rgba);
+    if (texture->point_sample || texture->width == 1 || texture->height == 1) {
+        x0 = clampi((int)(u * (float)(texture->width - 1) + 0.5f), 0, texture->width - 1);
+        y0 = clampi((int)(v * (float)(texture->height - 1) + 0.5f), 0, texture->height - 1);
+        sample_texture_texel(texture, x0, y0, rgba);
+        return;
+    }
+
+    tex_x = u * (float)texture->width - 0.5f;
+    tex_y = v * (float)texture->height - 0.5f;
+    x0 = (int)floorf(tex_x);
+    y0 = (int)floorf(tex_y);
+    x1 = x0 + 1;
+    y1 = y0 + 1;
+    fx = tex_x - (float)x0;
+    fy = tex_y - (float)y0;
+
+    sample_texture_texel(texture, x0, y0, c00);
+    sample_texture_texel(texture, x1, y0, c10);
+    sample_texture_texel(texture, x0, y1, c01);
+    sample_texture_texel(texture, x1, y1, c11);
+
+    rgba[3] =
+        (c00[3] + (c10[3] - c00[3]) * fx) * (1.0f - fy) +
+        (c01[3] + (c11[3] - c01[3]) * fx) * fy;
+
+    for (i = 0; i < 3; i++) {
+        float p00 = c00[i] * c00[3];
+        float p10 = c10[i] * c10[3];
+        float p01 = c01[i] * c01[3];
+        float p11 = c11[i] * c11[3];
+        float top = p00 + (p10 - p00) * fx;
+        float bottom = p01 + (p11 - p01) * fx;
+        float premul = top + (bottom - top) * fy;
+
+        if (rgba[3] > 1.0e-6f) {
+            rgba[i] = premul / rgba[3];
+        } else {
+            rgba[i] = 0.0f;
+        }
+    }
 }
 
 static void evaluate_combine_mode(int mode, const float *vertex, const float *tex1, const float *tex2, float *out)
@@ -541,6 +632,11 @@ static void draw_triangle(const SoftVertex *v0, const SoftVertex *v1, const Soft
     min_y = clampi((int)floorf(fminf(v0->sy, fminf(v1->sy, v2->sy))), 0, g_soft.height - 1);
     max_y = clampi((int)ceilf(fmaxf(v0->sy, fmaxf(v1->sy, v2->sy))), 0, g_soft.height - 1);
 
+    min_x = clampi((int)ceilf(g_soft.scissor_x0 - 0.5f), min_x, max_x);
+    max_x = clampi((int)floorf(g_soft.scissor_x1 - 0.5f), min_x, max_x);
+    min_y = clampi((int)ceilf(g_soft.scissor_y0 - 0.5f), min_y, max_y);
+    max_y = clampi((int)floorf(g_soft.scissor_y1 - 0.5f), min_y, max_y);
+
     for (y = min_y; y <= max_y; y++) {
         for (x = min_x; x <= max_x; x++) {
             float px = (float)x + 0.5f;
@@ -558,6 +654,11 @@ static void draw_triangle(const SoftVertex *v0, const SoftVertex *v1, const Soft
             float out[4];
             float depth;
             int index;
+
+            if (px < g_soft.scissor_x0 || px >= g_soft.scissor_x1 ||
+                py < g_soft.scissor_y0 || py >= g_soft.scissor_y1) {
+                continue;
+            }
 
             if ((area > 0.0f && (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)) ||
                 (area < 0.0f && (w0 > 0.0f || w1 > 0.0f || w2 > 0.0f))) {
@@ -806,6 +907,10 @@ int x_open(void *hdc, void *hwnd, int width, int height, int buffers, int vsync)
     g_soft.viewport_y0 = 0.0f;
     g_soft.viewport_x1 = (float)(width - 1);
     g_soft.viewport_y1 = (float)(height - 1);
+    g_soft.scissor_x0 = 0.0f;
+    g_soft.scissor_y0 = 0.0f;
+    g_soft.scissor_x1 = (float)width;
+    g_soft.scissor_y1 = (float)height;
     g_soft.color_mask = 1;
     g_soft.depth_mask = 1;
     g_soft.depth_test = 1;
@@ -1124,6 +1229,7 @@ int x_createtexture(int format, int width, int height)
             g_textures[handle].height = height;
             g_textures[handle].clamp_x = (format & X_CLAMP) && !(format & X_CLAMPNOX);
             g_textures[handle].clamp_y = (format & X_CLAMP) && !(format & X_CLAMPNOY);
+            g_textures[handle].point_sample = (format & X_NOBILIN) != 0;
             g_textures[handle].pixels = (uint32_t *)calloc((size_t)width * (size_t)height, sizeof(uint32_t));
             if (!g_textures[handle].pixels) {
                 memset(&g_textures[handle], 0, sizeof(g_textures[handle]));
@@ -1234,6 +1340,14 @@ void x_viewport(float x0, float y0, float x1, float y1)
     g_soft.viewport_y0 = y0;
     g_soft.viewport_x1 = x1;
     g_soft.viewport_y1 = y1;
+}
+
+void x_scissor(float x0, float y0, float x1, float y1)
+{
+    g_soft.scissor_x0 = clampf(x0, 0.0f, (float)g_soft.width);
+    g_soft.scissor_y0 = clampf(y0, 0.0f, (float)g_soft.height);
+    g_soft.scissor_x1 = clampf(x1, g_soft.scissor_x0, (float)g_soft.width);
+    g_soft.scissor_y1 = clampf(y1, g_soft.scissor_y0, (float)g_soft.height);
 }
 
 void x_frustum(float xmin, float xmax, float ymin, float ymax, float znear, float zfar)

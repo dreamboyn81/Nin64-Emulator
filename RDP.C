@@ -273,6 +273,10 @@ typedef struct
     int       view_x1;
     int       view_y0;
     int       view_y1;
+    int       scissor_x0;
+    int       scissor_x1;
+    int       scissor_y0;
+    int       scissor_y1;
 
     // active colors
     byte      col[C_NUM][4];
@@ -1715,7 +1719,7 @@ void txt_loaddata(Texture *txt,Tile *t)
 //    if(t->membase==0x8028b2b0) fill(s,sx,sy,0xff0000ff);
 //    if((t->membase&0xffff0000)==0x00340000) txt_fill(s,sx,sy,0xff0000ff);
 
-//    if(rst.s_txtfilt==0) flags|=X_NOBILIN;
+    if(rst.s_txtfilt==0) flags|=X_NOBILIN;
 
     txt->xhandle=x_createtexture(flags,txt->xs,txt->ys);
     if(txt->xhandle<0) exception("too many textures\n");
@@ -2610,6 +2614,46 @@ void rdp_viewport(float xm,float ym,float xa,float ya)
         rst.view_x0,rst.view_y0,
         rst.view_x1,rst.view_y1);
     realdrawmode();
+}
+
+static void rdp_setscissor(float x0,float y0,float x1,float y1)
+{
+    int ix0=(int)floorf(x0);
+    int iy0=(int)floorf(y0);
+    int ix1=(int)ceilf(x1);
+    int iy1=(int)ceilf(y1);
+
+    if(ix0<0) ix0=0;
+    if(iy0<0) iy0=0;
+    if(ix1>init.gfxwid) ix1=init.gfxwid;
+    if(iy1>init.gfxhig) iy1=init.gfxhig;
+    if(ix1<=ix0 || iy1<=iy0)
+    {
+        if(st.dumpgfx)
+        {
+            logd("\n!rdp_scissor ignored invalid (%i,%i)-(%i,%i)",
+                ix0,iy0,ix1,iy1);
+        }
+        return;
+    }
+
+    if(rst.prtabi!=rst.last_prtabi)
+    {
+        flushprims();
+    }
+
+    rst.scissor_x0=ix0;
+    rst.scissor_y0=iy0;
+    rst.scissor_x1=ix1;
+    rst.scissor_y1=iy1;
+    x_scissor((float)ix0,(float)iy0,(float)ix1,(float)iy1);
+
+    if(st.dumpgfx)
+    {
+        logd("\n!rdp_scissor (%i,%i)-(%i,%i)",
+            rst.scissor_x0,rst.scissor_y0,
+            rst.scissor_x1,rst.scissor_y1);
+    }
 }
 
 void rdp_texture(int on,int tile,int level)
@@ -5271,7 +5315,12 @@ int rdp_cmd(dword *cmd)
         logd("!skiprdp ");
         break;
     case 0xed: // RDP_SETSCISSOR
-        logd("!skiprdp ");
+        rdp_setscissor(
+            0.25f*(float)FIELD(cmd[0],12,12),
+            0.25f*(float)FIELD(cmd[0],0,12),
+            0.25f*(float)FIELD(cmd[1],12,12),
+            0.25f*(float)FIELD(cmd[1],0,12)
+        );
         break;
     case 0xec: // RDP_SETCONVERT
         logd("!skiprdp ");
@@ -5380,6 +5429,11 @@ void rdp_framestart(void)
     rst.view_y0=0;
     rst.view_x1=init.gfxwid-1;
     rst.view_y1=init.gfxhig-1;
+    rst.scissor_x0=0;
+    rst.scissor_y0=0;
+    rst.scissor_x1=init.gfxwid;
+    rst.scissor_y1=init.gfxhig;
+    x_scissor(0,0,(float)init.gfxwid,(float)init.gfxhig);
 
     rst.txtloads=0;
 

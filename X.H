@@ -364,6 +364,7 @@ EXPORT void    x_closetexturedata(int handle);
 
 // projection setup
 EXPORT void    x_viewport(float x0,float y0,float x1,float y1);
+EXPORT void    x_scissor(float x0,float y0,float x1,float y1);
 EXPORT void    x_frustum(float xmin,float xmax,float ymin,float ymax,float znear,float zfar);
 EXPORT void    x_ortho(float xmin,float ymin,float xmax,float ymax,float znear,float zfar);
 EXPORT void    x_projmatrix(xt_matrix *matrix); // NULL=ident
@@ -417,4 +418,3 @@ extern xt_pos   g_pos;
 #endif
 
 #endif//_X_H_
-
