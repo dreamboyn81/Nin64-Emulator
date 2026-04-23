@@ -6,6 +6,7 @@
 #define PORT_LOG_BUFFER_SIZE 32768
 #define PORT_FRAMEBUFFER_MAX_WIDTH 640
 #define PORT_FRAMEBUFFER_MAX_HEIGHT 480
+#define PORT_ECHO_LOGCAT 0
 
 ROMLIST romList;
 View view;
@@ -395,7 +396,9 @@ static void log_line(const char *prefix, const char *text)
         log_append("\n");
     }
 
+#if PORT_ECHO_LOGCAT
     __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "%s%s", prefix ? prefix : "", text);
+#endif
 }
 
 void outputhook(char *txt, char *full)

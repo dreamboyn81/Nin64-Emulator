@@ -11,6 +11,7 @@ object NativeBridge {
     external fun getFrameWidth(): Int
     external fun getFrameHeight(): Int
     external fun copyFrameBufferArgb(): IntArray
+    external fun copyFrameBufferArgbInto(buffer: IntArray): Int
 
     external fun bootRomForPlay(rootPath: String, romPath: String): String
     external fun runFrame(ops: Int)

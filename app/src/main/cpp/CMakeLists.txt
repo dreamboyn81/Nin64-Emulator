@@ -72,6 +72,7 @@ target_include_directories(
 target_compile_options(
     ultrahle_core
     PRIVATE
+    -O3
     -include
     "${PORT_COMPAT}"
     -fcommon

@@ -51,8 +51,8 @@ static void configure_paths(const char *root)
     fixpath(init.savepath,0);
     fixpath(init.rompath,0);
 
-    init.gfxwid=640;
-    init.gfxhig=480;
+    init.gfxwid=320;
+    init.gfxhig=240;
     init.showconsole=0;
     init.nomemmap=1;
 }
@@ -298,4 +298,35 @@ Java_com_izzy2lost_nin64_NativeBridge_copyFrameBufferArgb(JNIEnv *env, jobject t
 
     free(buffer);
     return array;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_izzy2lost_nin64_NativeBridge_copyFrameBufferArgbInto(JNIEnv *env, jobject thiz, jintArray array)
+{
+    jint *pixels;
+    jsize max_pixels;
+    int copied_pixels;
+
+    (void)thiz;
+
+    if(!array)
+    {
+        return 0;
+    }
+
+    max_pixels=(*env)->GetArrayLength(env,array);
+    if(max_pixels<=0)
+    {
+        return 0;
+    }
+
+    pixels=(jint *)(*env)->GetPrimitiveArrayCritical(env,array,NULL);
+    if(!pixels)
+    {
+        return 0;
+    }
+
+    copied_pixels=android_port_copy_framebuffer((uint32_t *)pixels,(int)max_pixels);
+    (*env)->ReleasePrimitiveArrayCritical(env,array,pixels,0);
+    return (jint)copied_pixels;
 }

@@ -7,6 +7,13 @@
 #define XSOFT_MAX_TEXTURES 2048
 #define XSOFT_MAX_PRIM_VERTICES 4
 #define XSOFT_DEPTH_CLEAR 1.0e30f
+#define XSOFT_ENABLE_DIAGNOSTICS 0
+
+#if XSOFT_ENABLE_DIAGNOSTICS
+#define XSOFT_DIAG(code) do { code; } while (0)
+#else
+#define XSOFT_DIAG(code) do { } while (0)
+#endif
 
 typedef struct
 {
@@ -430,11 +437,11 @@ static void draw_triangle(const SoftVertex *v0, const SoftVertex *v1, const Soft
         return;
     }
 
-    g_soft.rasterized_tris++;
-    g_soft.last_tri_bbox[0] = fminf(v0->sx, fminf(v1->sx, v2->sx));
-    g_soft.last_tri_bbox[1] = fminf(v0->sy, fminf(v1->sy, v2->sy));
-    g_soft.last_tri_bbox[2] = fmaxf(v0->sx, fmaxf(v1->sx, v2->sx));
-    g_soft.last_tri_bbox[3] = fmaxf(v0->sy, fmaxf(v1->sy, v2->sy));
+    XSOFT_DIAG(g_soft.rasterized_tris++);
+    XSOFT_DIAG(g_soft.last_tri_bbox[0] = fminf(v0->sx, fminf(v1->sx, v2->sx)));
+    XSOFT_DIAG(g_soft.last_tri_bbox[1] = fminf(v0->sy, fminf(v1->sy, v2->sy)));
+    XSOFT_DIAG(g_soft.last_tri_bbox[2] = fmaxf(v0->sx, fmaxf(v1->sx, v2->sx)));
+    XSOFT_DIAG(g_soft.last_tri_bbox[3] = fmaxf(v0->sy, fmaxf(v1->sy, v2->sy)));
 
     min_x = clampi((int)floorf(fminf(v0->sx, fminf(v1->sx, v2->sx))), 0, g_soft.width - 1);
     max_x = clampi((int)ceilf(fmaxf(v0->sx, fmaxf(v1->sx, v2->sx))), 0, g_soft.width - 1);
@@ -479,7 +486,7 @@ static void draw_triangle(const SoftVertex *v0, const SoftVertex *v1, const Soft
                 continue;
             }
 
-            g_soft.shaded_pixels++;
+            XSOFT_DIAG(g_soft.shaded_pixels++);
 
             unpack_color(g_soft.color[index], dst);
             blend_factor(g_soft.blend_src, src, dst, src_factor);
@@ -492,7 +499,7 @@ static void draw_triangle(const SoftVertex *v0, const SoftVertex *v1, const Soft
 
             if (g_soft.color_mask) {
                 g_soft.color[index] = pack_color(out);
-                g_soft.color_writes++;
+                XSOFT_DIAG(g_soft.color_writes++);
             }
             if (g_soft.depth_mask) {
                 g_soft.depth[index] = depth;
@@ -545,14 +552,14 @@ static void submit_vertex(const SoftVertex *vertex)
     }
 
     g_soft.prim[g_soft.prim_count++] = *vertex;
-    g_soft.submitted_vertices++;
+    XSOFT_DIAG(g_soft.submitted_vertices++);
 
     if (g_soft.prim_type == X_TRIANGLES && g_soft.prim_count == 3) {
-        g_soft.submitted_tris++;
+        XSOFT_DIAG(g_soft.submitted_tris++);
         draw_triangle(&g_soft.prim[0], &g_soft.prim[1], &g_soft.prim[2]);
         g_soft.prim_count = 0;
     } else if (g_soft.prim_type == X_QUADS && g_soft.prim_count == 4) {
-        g_soft.submitted_tris += 2;
+        XSOFT_DIAG(g_soft.submitted_tris += 2);
         draw_triangle(&g_soft.prim[0], &g_soft.prim[1], &g_soft.prim[2]);
         draw_triangle(&g_soft.prim[0], &g_soft.prim[2], &g_soft.prim[3]);
         g_soft.prim_count = 0;
@@ -754,56 +761,39 @@ int x_writefb(int fb, int x, int y, int xs, int ys, char *buffer, int bufrowlen)
 
 void x_finish(void)
 {
-    int non_black = 0;
-    int opaque = 0;
-    size_t i;
-    size_t pixel_count;
-
     if (!g_soft.color || !g_soft.opened) {
         return;
     }
 
-    pixel_count = (size_t)g_soft.width * (size_t)g_soft.height;
-    for (i = 0; i < pixel_count; i++) {
-        uint32_t pixel = g_soft.color[i];
-
-        if ((pixel & 0x00FFFFFFu) != 0) {
-            non_black++;
-        }
-        if ((pixel >> 24) != 0) {
-            opaque++;
-        }
-    }
-
+#if XSOFT_ENABLE_DIAGNOSTICS
     if ((g_soft.frame_id < 10 || (g_soft.frame_id % 120) == 0) &&
         (g_soft.submitted_vertices || g_soft.submitted_tris || g_soft.rasterized_tris)) {
         print(
-            "xsoft frame %i: vx=%i tris=%i rast=%i px=%i writes=%i nonblack=%i opaque=%i bbox=(%.1f,%.1f)-(%.1f,%.1f)\n",
+            "xsoft frame %i: vx=%i tris=%i rast=%i px=%i writes=%i bbox=(%.1f,%.1f)-(%.1f,%.1f)\n",
             g_soft.frame_id,
             g_soft.submitted_vertices,
             g_soft.submitted_tris,
             g_soft.rasterized_tris,
             g_soft.shaded_pixels,
             g_soft.color_writes,
-            non_black,
-            opaque,
             g_soft.last_tri_bbox[0],
             g_soft.last_tri_bbox[1],
             g_soft.last_tri_bbox[2],
             g_soft.last_tri_bbox[3]
         );
     }
+#endif
     android_port_present_framebuffer(g_soft.color, g_soft.width, g_soft.height);
-    g_soft.frame_id++;
-    g_soft.submitted_vertices = 0;
-    g_soft.submitted_tris = 0;
-    g_soft.rasterized_tris = 0;
-    g_soft.shaded_pixels = 0;
-    g_soft.color_writes = 0;
-    g_soft.last_tri_bbox[0] = 0.0f;
-    g_soft.last_tri_bbox[1] = 0.0f;
-    g_soft.last_tri_bbox[2] = 0.0f;
-    g_soft.last_tri_bbox[3] = 0.0f;
+    XSOFT_DIAG(g_soft.frame_id++);
+    XSOFT_DIAG(g_soft.submitted_vertices = 0);
+    XSOFT_DIAG(g_soft.submitted_tris = 0);
+    XSOFT_DIAG(g_soft.rasterized_tris = 0);
+    XSOFT_DIAG(g_soft.shaded_pixels = 0);
+    XSOFT_DIAG(g_soft.color_writes = 0);
+    XSOFT_DIAG(g_soft.last_tri_bbox[0] = 0.0f);
+    XSOFT_DIAG(g_soft.last_tri_bbox[1] = 0.0f);
+    XSOFT_DIAG(g_soft.last_tri_bbox[2] = 0.0f);
+    XSOFT_DIAG(g_soft.last_tri_bbox[3] = 0.0f);
 }
 
 void x_getstats(xt_stats *s, int ssize)
@@ -888,7 +878,7 @@ int x_blend(int src, int dst)
 {
     g_soft.blend_src = src;
     g_soft.blend_dst = dst;
-    if (g_debug_state_logs < 24) {
+    if (XSOFT_ENABLE_DIAGNOSTICS && g_debug_state_logs < 24) {
         print("xsoft blend %d,%d\n", src, dst);
         g_debug_state_logs++;
     }
@@ -926,7 +916,7 @@ int x_procombine(int rgb, int alpha)
 {
     g_soft.combine_rgb = rgb;
     g_soft.combine_alpha = alpha;
-    if (g_debug_state_logs < 24) {
+    if (XSOFT_ENABLE_DIAGNOSTICS && g_debug_state_logs < 24) {
         print("xsoft combine rgb=%d alpha=%d tex=%d\n", rgb, alpha, g_soft.tex1);
         g_debug_state_logs++;
     }
@@ -939,7 +929,7 @@ int x_procombine2(int rgb, int alpha, int text1text2, int sametex)
     g_soft.combine_alpha = alpha;
     g_soft.dual_mode = text1text2;
     (void)sametex;
-    if (g_debug_state_logs < 24) {
+    if (XSOFT_ENABLE_DIAGNOSTICS && g_debug_state_logs < 24) {
         print("xsoft combine2 rgb=%d alpha=%d tex=%d/%d mode=%d\n", rgb, alpha, g_soft.tex1, g_soft.tex2, text1text2);
         g_debug_state_logs++;
     }
@@ -950,7 +940,7 @@ int x_texture(int text1handle)
 {
     g_soft.tex1 = text1handle;
     g_soft.tex2 = 0;
-    if (g_debug_state_logs < 24) {
+    if (XSOFT_ENABLE_DIAGNOSTICS && g_debug_state_logs < 24) {
         print("xsoft texture %d\n", text1handle);
         g_debug_state_logs++;
     }
@@ -961,7 +951,7 @@ int x_texture2(int text1handle, int text2handle)
 {
     g_soft.tex1 = text1handle;
     g_soft.tex2 = text2handle;
-    if (g_debug_state_logs < 24) {
+    if (XSOFT_ENABLE_DIAGNOSTICS && g_debug_state_logs < 24) {
         print("xsoft texture2 %d,%d\n", text1handle, text2handle);
         g_debug_state_logs++;
     }
@@ -998,35 +988,29 @@ int x_loadtexturelevel(int handle, int level, char *data)
     size_t pixel_count;
     size_t i;
     const unsigned char *src = (const unsigned char *)data;
-    int non_black;
 
     if (!texture || !data || level != 0) {
         return 1;
     }
 
     pixel_count = (size_t)texture->width * (size_t)texture->height;
-    non_black = 0;
     for (i = 0; i < pixel_count; i++) {
         unsigned char r = src[i * 4 + 0];
         unsigned char g = src[i * 4 + 1];
         unsigned char b = src[i * 4 + 2];
         unsigned char a = src[i * 4 + 3];
-        if (r || g || b) {
-            non_black++;
-        }
         texture->pixels[i] = ((uint32_t)a << 24) |
             ((uint32_t)r << 16) |
             ((uint32_t)g << 8) |
             (uint32_t)b;
     }
 
-    if (g_debug_texture_logs < 16) {
+    if (XSOFT_ENABLE_DIAGNOSTICS && g_debug_texture_logs < 16) {
         print(
-            "xsoft texload h=%d size=%dx%d nonblack=%d first=%02X%02X%02X%02X\n",
+            "xsoft texload h=%d size=%dx%d first=%02X%02X%02X%02X\n",
             handle,
             texture->width,
             texture->height,
-            non_black,
             src[0],
             src[1],
             src[2],
