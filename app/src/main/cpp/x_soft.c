@@ -6,6 +6,7 @@
 
 #define XSOFT_MAX_TEXTURES 2048
 #define XSOFT_MAX_PRIM_VERTICES 4
+#define XSOFT_MAX_CLIPPED_VERTICES 16
 #define XSOFT_DEPTH_CLEAR 1.0e30f
 #define XSOFT_ENABLE_DIAGNOSTICS 0
 
@@ -28,6 +29,9 @@ typedef struct
 
 typedef struct
 {
+    float clip_x;
+    float clip_y;
+    float clip_w;
     float sx;
     float sy;
     float depth;
@@ -146,6 +150,70 @@ static void fill_color(float *dst, float r, float g, float b, float a)
     dst[1] = g;
     dst[2] = b;
     dst[3] = a;
+}
+
+static void update_raster_vertex(SoftVertex *vertex)
+{
+    float width;
+    float height;
+    float w;
+    float ndc_x;
+    float ndc_y;
+
+    w = vertex->clip_w;
+    if (fabsf(w) < 1.0e-6f) {
+        w = (w < 0.0f) ? -1.0e-6f : 1.0e-6f;
+    }
+
+    ndc_x = vertex->clip_x / w;
+    ndc_y = vertex->clip_y / w;
+    width = g_soft.viewport_x1 - g_soft.viewport_x0 + 1.0f;
+    height = g_soft.viewport_y1 - g_soft.viewport_y0 + 1.0f;
+
+    vertex->sx = g_soft.viewport_x0 + (ndc_x + 1.0f) * 0.5f * width;
+    vertex->sy = g_soft.viewport_y0 + (1.0f - (ndc_y + 1.0f) * 0.5f) * height;
+    vertex->depth = fabsf(w);
+    vertex->inv_w = 1.0f / w;
+}
+
+static float clip_plane_distance(const SoftVertex *vertex, int plane)
+{
+    switch (plane) {
+    case 0:
+        return vertex->clip_x + vertex->clip_w;
+    case 1:
+        return vertex->clip_w - vertex->clip_x;
+    case 2:
+        return vertex->clip_y + vertex->clip_w;
+    case 3:
+        return vertex->clip_w - vertex->clip_y;
+    case 4:
+        return vertex->clip_w - 1.0e-5f;
+    default:
+        return 1.0f;
+    }
+}
+
+static SoftVertex lerp_vertex(const SoftVertex *a, const SoftVertex *b, float t)
+{
+    SoftVertex out;
+    int i;
+
+    memset(&out, 0, sizeof(out));
+    out.clip_x = a->clip_x + (b->clip_x - a->clip_x) * t;
+    out.clip_y = a->clip_y + (b->clip_y - a->clip_y) * t;
+    out.clip_w = a->clip_w + (b->clip_w - a->clip_w) * t;
+
+    for (i = 0; i < 4; i++) {
+        out.color[i] = a->color[i] + (b->color[i] - a->color[i]) * t;
+    }
+    for (i = 0; i < 2; i++) {
+        out.tex1[i] = a->tex1[i] + (b->tex1[i] - a->tex1[i]) * t;
+        out.tex2[i] = a->tex2[i] + (b->tex2[i] - a->tex2[i]) * t;
+    }
+
+    update_raster_vertex(&out);
+    return out;
 }
 
 static SoftTexture *xsoft_texture(int handle)
@@ -292,7 +360,17 @@ static void evaluate_combine_mode(int mode, const float *vertex, const float *te
     }
 }
 
-static void blend_factor(int mode, const float *src, const float *dst, float *factor)
+static void resolve_dual_texture(const float *tex1, const float *tex2, float *out)
+{
+    if (g_soft.tex2 <= 0 || g_soft.dual_mode == 0) {
+        copy_color(out, tex1);
+        return;
+    }
+
+    evaluate_combine_mode(g_soft.dual_mode, tex1, tex2, tex2, out);
+}
+
+static void blend_factor(int mode, const float *self, const float *other, float *factor)
 {
     switch (mode) {
     case X_ZERO:
@@ -302,25 +380,37 @@ static void blend_factor(int mode, const float *src, const float *dst, float *fa
         fill_color(factor, 1.0f, 1.0f, 1.0f, 1.0f);
         break;
     case X_OTHER:
-        copy_color(factor, dst);
+        copy_color(factor, other);
         break;
     case X_ALPHA:
-        fill_color(factor, src[3], src[3], src[3], src[3]);
+        fill_color(factor, self[3], self[3], self[3], self[3]);
         break;
     case X_OTHERALPHA:
-        fill_color(factor, dst[3], dst[3], dst[3], dst[3]);
+        fill_color(factor, other[3], other[3], other[3], other[3]);
         break;
     case X_INVOTHER:
-        factor[0] = 1.0f - dst[0];
-        factor[1] = 1.0f - dst[1];
-        factor[2] = 1.0f - dst[2];
-        factor[3] = 1.0f - dst[3];
+        factor[0] = 1.0f - other[0];
+        factor[1] = 1.0f - other[1];
+        factor[2] = 1.0f - other[2];
+        factor[3] = 1.0f - other[3];
         break;
     case X_INVALPHA:
-        fill_color(factor, 1.0f - src[3], 1.0f - src[3], 1.0f - src[3], 1.0f - src[3]);
+        fill_color(
+            factor,
+            1.0f - self[3],
+            1.0f - self[3],
+            1.0f - self[3],
+            1.0f - self[3]
+        );
         break;
     case X_INVOTHERALPHA:
-        fill_color(factor, 1.0f - dst[3], 1.0f - dst[3], 1.0f - dst[3], 1.0f - dst[3]);
+        fill_color(
+            factor,
+            1.0f - other[3],
+            1.0f - other[3],
+            1.0f - other[3],
+            1.0f - other[3]
+        );
         break;
     default:
         fill_color(factor, 1.0f, 1.0f, 1.0f, 1.0f);
@@ -372,6 +462,7 @@ static void shade_fragment(
     float vertex[4];
     float tex1[4];
     float tex2[4];
+    float texture[4];
     float rgb_mode[4];
     float alpha_mode[4];
 
@@ -404,8 +495,10 @@ static void shade_fragment(
         tex2
     );
 
-    evaluate_combine_mode(g_soft.combine_rgb, vertex, tex1, tex2, rgb_mode);
-    evaluate_combine_mode(g_soft.combine_alpha, vertex, tex1, tex2, alpha_mode);
+    resolve_dual_texture(tex1, tex2, texture);
+
+    evaluate_combine_mode(g_soft.combine_rgb, vertex, texture, tex2, rgb_mode);
+    evaluate_combine_mode(g_soft.combine_alpha, vertex, texture, tex2, alpha_mode);
 
     out_rgba[0] = rgb_mode[0];
     out_rgba[1] = rgb_mode[1];
@@ -490,7 +583,7 @@ static void draw_triangle(const SoftVertex *v0, const SoftVertex *v1, const Soft
 
             unpack_color(g_soft.color[index], dst);
             blend_factor(g_soft.blend_src, src, dst, src_factor);
-            blend_factor(g_soft.blend_dst, src, dst, dst_factor);
+            blend_factor(g_soft.blend_dst, dst, src, dst_factor);
 
             out[0] = clampf(src[0] * src_factor[0] + dst[0] * dst_factor[0], 0.0f, 1.0f);
             out[1] = clampf(src[1] * src_factor[1] + dst[1] * dst_factor[1], 0.0f, 1.0f);
@@ -511,28 +604,11 @@ static void draw_triangle(const SoftVertex *v0, const SoftVertex *v1, const Soft
 static SoftVertex make_vertex(const xt_pos *pos, const xt_data *data)
 {
     SoftVertex vertex;
-    float width;
-    float height;
-    float w;
-    float ndc_x;
-    float ndc_y;
 
     memset(&vertex, 0, sizeof(vertex));
-
-    w = pos ? pos->z : 1.0f;
-    if (fabsf(w) < 1.0e-6f) {
-        w = 1.0f;
-    }
-
-    ndc_x = pos ? (pos->x / w) : 0.0f;
-    ndc_y = pos ? (pos->y / w) : 0.0f;
-    width = g_soft.viewport_x1 - g_soft.viewport_x0 + 1.0f;
-    height = g_soft.viewport_y1 - g_soft.viewport_y0 + 1.0f;
-
-    vertex.sx = g_soft.viewport_x0 + (ndc_x + 1.0f) * 0.5f * width;
-    vertex.sy = g_soft.viewport_y0 + (1.0f - (ndc_y + 1.0f) * 0.5f) * height;
-    vertex.depth = fabsf(w);
-    vertex.inv_w = 1.0f / fabsf(w);
+    vertex.clip_x = pos ? pos->x : 0.0f;
+    vertex.clip_y = pos ? pos->y : 0.0f;
+    vertex.clip_w = pos ? pos->z : 1.0f;
     vertex.color[0] = data ? data->r : 1.0f;
     vertex.color[1] = data ? data->g : 1.0f;
     vertex.color[2] = data ? data->b : 1.0f;
@@ -541,8 +617,88 @@ static SoftVertex make_vertex(const xt_pos *pos, const xt_data *data)
     vertex.tex1[1] = data ? data->t1t : 0.0f;
     vertex.tex2[0] = data ? data->t2s : 0.0f;
     vertex.tex2[1] = data ? data->t2t : 0.0f;
+    update_raster_vertex(&vertex);
 
     return vertex;
+}
+
+static int clip_polygon_against_plane(
+    const SoftVertex *input,
+    int input_count,
+    int plane,
+    SoftVertex *output
+)
+{
+    int output_count;
+    int i;
+
+    if (input_count <= 0) {
+        return 0;
+    }
+
+    output_count = 0;
+
+    for (i = 0; i < input_count; i++) {
+        const SoftVertex *current = &input[i];
+        const SoftVertex *previous = &input[(i + input_count - 1) % input_count];
+        float current_distance = clip_plane_distance(current, plane);
+        float previous_distance = clip_plane_distance(previous, plane);
+        int current_inside = current_distance >= 0.0f;
+        int previous_inside = previous_distance >= 0.0f;
+
+        if (previous_inside != current_inside) {
+            float denom = previous_distance - current_distance;
+            float t = 0.0f;
+            if (fabsf(denom) > 1.0e-6f) {
+                t = previous_distance / denom;
+            }
+            if (output_count < XSOFT_MAX_CLIPPED_VERTICES) {
+                output[output_count++] = lerp_vertex(previous, current, t);
+            }
+        }
+
+        if (current_inside && output_count < XSOFT_MAX_CLIPPED_VERTICES) {
+            output[output_count++] = *current;
+        }
+    }
+
+    return output_count;
+}
+
+static void draw_polygon_clipped(const SoftVertex *vertices, int vertex_count)
+{
+    SoftVertex buffers[2][XSOFT_MAX_CLIPPED_VERTICES];
+    const SoftVertex *src;
+    SoftVertex *dst;
+    int src_index;
+    int count;
+    int plane;
+    int i;
+
+    if (vertex_count < 3 || vertex_count > XSOFT_MAX_PRIM_VERTICES) {
+        return;
+    }
+
+    memcpy(buffers[0], vertices, (size_t)vertex_count * sizeof(vertices[0]));
+    src_index = 0;
+    count = vertex_count;
+
+    for (plane = 0; plane < 5 && count >= 3; plane++) {
+        src = buffers[src_index];
+        dst = buffers[src_index ^ 1];
+        count = clip_polygon_against_plane(src, count, plane, dst);
+        src_index ^= 1;
+    }
+
+    if (count < 3) {
+        return;
+    }
+
+    src = buffers[src_index];
+    XSOFT_DIAG(g_soft.submitted_tris += count - 2);
+    for (i = 1; i < count - 1; i++) {
+        draw_triangle(&src[0], &src[i], &src[i + 1]);
+    }
 }
 
 static void submit_vertex(const SoftVertex *vertex)
@@ -555,13 +711,10 @@ static void submit_vertex(const SoftVertex *vertex)
     XSOFT_DIAG(g_soft.submitted_vertices++);
 
     if (g_soft.prim_type == X_TRIANGLES && g_soft.prim_count == 3) {
-        XSOFT_DIAG(g_soft.submitted_tris++);
-        draw_triangle(&g_soft.prim[0], &g_soft.prim[1], &g_soft.prim[2]);
+        draw_polygon_clipped(g_soft.prim, 3);
         g_soft.prim_count = 0;
     } else if (g_soft.prim_type == X_QUADS && g_soft.prim_count == 4) {
-        XSOFT_DIAG(g_soft.submitted_tris += 2);
-        draw_triangle(&g_soft.prim[0], &g_soft.prim[1], &g_soft.prim[2]);
-        draw_triangle(&g_soft.prim[0], &g_soft.prim[2], &g_soft.prim[3]);
+        draw_polygon_clipped(g_soft.prim, 4);
         g_soft.prim_count = 0;
     }
 }
@@ -900,10 +1053,11 @@ int x_combine(int colortext1)
 
 int x_combine2(int colortext1, int text1text2, int sametex)
 {
-    (void)colortext1;
-    (void)text1text2;
+    g_soft.combine_rgb = colortext1;
+    g_soft.combine_alpha = colortext1;
+    g_soft.dual_mode = text1text2;
     (void)sametex;
-    return 1;
+    return 0;
 }
 
 int x_envcolor(float r, float g, float b, float a)

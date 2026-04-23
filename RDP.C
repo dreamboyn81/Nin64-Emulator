@@ -842,6 +842,11 @@ int txt_findmatch(Tile *t)
     Texture *txt;
     int i,j;
 
+    if(t->fromfb)
+    {
+        return(0);
+    }
+
     i=txt_findstart(t);
 
     // find texture matching parameters
@@ -860,6 +865,10 @@ int txt_findmatch(Tile *t)
            txt->membpp ==t->membpp  &&
            txt->memfmt ==t->memfmt  && i)
         {
+            if(txt->fromfb)
+            {
+                return(-i);
+            }
             if(txt->memcrc==t->crc)
             {
                 return(i);
@@ -1517,12 +1526,32 @@ void rdp_grabscreen(void)
     #endif
 }
 
+static int ensure_framegrab(void)
+{
+    if(!rst.framegrab)
+    {
+        rst.framegrab=malloc(init.gfxwid*init.gfxhig*4);
+        if(!rst.framegrab) return 0;
+    }
+
+    x_readfb(
+        X_FB_FRONT|X_FB_RGBA8888,
+        0,
+        0,
+        init.gfxwid,
+        init.gfxhig,
+        rst.framegrab,
+        init.gfxwid*4
+    );
+    return 1;
+}
+
 void txt_fromfb(byte *buf,Tile *t)
 {
     int x,y,y0,xa,xx;
     dword *s,*d;
 
-    if(!rst.framegrab)
+    if(!ensure_framegrab())
     {
         d=(dword *)buf;
         for(y=0;y<t->ys;y++)
@@ -1559,19 +1588,22 @@ void txt_fromfb(byte *buf,Tile *t)
 
 void txt_fromcbuf(byte *buf,Tile *t)
 {
-    int x,y;
-    dword *d;
-    dword cols[4]={0xff000000,0xff101010,
-                   0xff101010,0xff000000};
-
-    d=(dword *)buf;
-    for(y=0;y<t->ys;y++)
+    if(!ensure_framegrab())
     {
-        for(x=0;x<t->xs;x++)
+        int x,y;
+        dword *d=(dword *)buf;
+
+        for(y=0;y<t->ys;y++)
         {
-            d[x+y*t->xs]=cols[(y&1)*2+(x&1)];
+            for(x=0;x<t->xs;x++)
+            {
+                d[x+y*t->xs]=0;
+            }
         }
+        return;
     }
+
+    txt_fromfb(buf,t);
 }
 
 #define SWAP(s,d) sd=s,s=d,d=sd
@@ -1626,12 +1658,13 @@ void txt_loaddata(Texture *txt,Tile *t)
     */
     if(t->fromfb)
     {
-        txt->fromfb=0;
+        txt->fromfb=1;
         logd(" CBUFSOURCE ");
         txt_fromcbuf(s,t);
     }
     else
     {
+        txt->fromfb=0;
         // convert to RGBA
         txt_convert(s,t);
     }
@@ -2056,8 +2089,8 @@ void drawprims(int p,int i0,int i1)
                 */
                 x_vxtex ((vx->tex[0]+rst.txt_uadd )*rst.txt_uscale,
                          (vx->tex[1]+rst.txt_vadd )*rst.txt_vscale);
-                x_vxtex2((vx->tex[0]+rst.txt_uadd2)*rst.txt_uscale,
-                         (vx->tex[1]+rst.txt_vadd2)*rst.txt_vscale);
+                x_vxtex2((vx->tex[0]+rst.txt_uadd2)*rst.txt_uscale2,
+                         (vx->tex[1]+rst.txt_vadd2)*rst.txt_vscale2);
                 x_vxposv((xt_pos *)vx->pos);
             }
         }

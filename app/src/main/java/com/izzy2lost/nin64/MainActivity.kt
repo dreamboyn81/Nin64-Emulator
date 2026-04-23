@@ -3,6 +3,7 @@ package com.izzy2lost.nin64
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ImageView
@@ -494,12 +495,90 @@ class MainActivity : AppCompatActivity() {
         val bootRomPath = intent.getStringExtra(EXTRA_BOOT_ROM_PATH) ?: return
         val romFile = File(bootRomPath)
 
-        if (!romFile.exists()) {
-            statusText.text = getString(R.string.debug_boot_missing, bootRomPath)
-            return
+        when {
+            romFile.canRead() -> bootSelectedRom(romFile.toRomEntry())
+            else -> {
+                val resolvedEntry = resolveBootIntentEntry(bootRomPath)
+                if (resolvedEntry != null) {
+                    bootSelectedRom(resolvedEntry)
+                } else {
+                    statusText.text = getString(R.string.debug_boot_missing, bootRomPath)
+                }
+            }
+        }
+    }
+
+    private fun resolveBootIntentEntry(bootRomPath: String): RomEntry? {
+        val savedFolderUri = readSavedRomFolderUri() ?: return null
+        val treeRoot = DocumentFile.fromTreeUri(this, savedFolderUri) ?: return null
+        val relativePath = resolveRelativePathFromTree(savedFolderUri, bootRomPath)
+        val matchedDocument = relativePath?.let { findDocumentByRelativePath(treeRoot, it) }
+            ?: findDocumentByFileName(treeRoot, File(bootRomPath).name)
+
+        return matchedDocument
+            ?.takeIf { it.isFile && isRomFile(it.name) }
+            ?.toRomEntry()
+    }
+
+    private fun resolveRelativePathFromTree(treeUri: Uri, bootRomPath: String): String? {
+        val treeRootPath = treeUriToExternalStoragePath(treeUri) ?: return null
+        val normalizedBootPath = normalizeExternalPath(bootRomPath)
+        val normalizedRootPath = normalizeExternalPath(treeRootPath)
+        if (!normalizedBootPath.startsWith(normalizedRootPath)) {
+            return null
         }
 
-        bootSelectedRom(romFile.toRomEntry())
+        return normalizedBootPath
+            .removePrefix(normalizedRootPath)
+            .trimStart('/')
+            .takeIf { it.isNotEmpty() }
+    }
+
+    private fun treeUriToExternalStoragePath(treeUri: Uri): String? {
+        val documentId = runCatching {
+            DocumentsContract.getTreeDocumentId(treeUri)
+        }.getOrNull()
+        val decodedId = documentId?.let(Uri::decode) ?: return null
+        val root = when {
+            decodedId == "primary:" -> "/storage/emulated/0"
+            decodedId.startsWith("primary:") -> "/storage/emulated/0/${decodedId.removePrefix("primary:")}"
+            else -> return null
+        }
+        return normalizeExternalPath(root)
+    }
+
+    private fun normalizeExternalPath(path: String): String {
+        val normalized = path.replace('\\', '/')
+        return when {
+            normalized == "/sdcard" -> "/storage/emulated/0"
+            normalized.startsWith("/sdcard/") -> normalized.replaceFirst("/sdcard", "/storage/emulated/0")
+            else -> normalized.trimEnd('/')
+        }
+    }
+
+    private fun findDocumentByRelativePath(root: DocumentFile, relativePath: String): DocumentFile? {
+        var current: DocumentFile? = root
+        for (segment in relativePath.split('/').filter { it.isNotBlank() }) {
+            current = current?.findFile(segment) ?: return null
+        }
+        return current
+    }
+
+    private fun findDocumentByFileName(root: DocumentFile, fileName: String): DocumentFile? {
+        val queue = ArrayDeque<DocumentFile>()
+        queue.add(root)
+
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            for (child in current.listFiles()) {
+                when {
+                    child.isDirectory -> queue.addLast(child)
+                    child.isFile && child.name == fileName -> return child
+                }
+            }
+        }
+
+        return null
     }
 
     private data class RomEntry(
