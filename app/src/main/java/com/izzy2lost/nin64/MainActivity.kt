@@ -5,16 +5,15 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.ListView
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -36,7 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var configPathText: TextView
     private lateinit var romFolderText: TextView
     private lateinit var gamesHeaderText: TextView
-    private lateinit var romListView: ListView
+    private lateinit var romRecyclerView: RecyclerView
     private lateinit var framePreviewImage: ImageView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var pickFolderButton: android.widget.Button
@@ -83,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         configPathText = findViewById(R.id.configPathText)
         romFolderText = findViewById(R.id.romFolderText)
         gamesHeaderText = findViewById(R.id.gamesHeaderText)
-        romListView = findViewById(R.id.romListView)
+        romRecyclerView = findViewById(R.id.romRecyclerView)
         framePreviewImage = findViewById(R.id.framePreviewImage)
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout)
         ViewCompat.setOnApplyWindowInsetsListener(swipeRefreshLayout) { view, insets ->
@@ -101,10 +100,8 @@ class MainActivity : AppCompatActivity() {
         emptyRomListText = findViewById(R.id.emptyRomListText)
 
         romAdapter = RomAdapter()
-        romListView.adapter = romAdapter
-        romListView.setOnItemClickListener { _, _, position, _ ->
-            romEntries.getOrNull(position)?.let(::bootSelectedRom)
-        }
+        romRecyclerView.layoutManager = LinearLayoutManager(this)
+        romRecyclerView.adapter = romAdapter
 
         configPathText.text = File(preferredRootDir(), ULTRA_INI_NAME).absolutePath
         updateRomFolderLabel(readSavedRomFolderUri())
@@ -287,7 +284,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateEmptyState() {
         val hasFolderConfigured = readSavedRomFolderUri() != null
         pickFolderButton.visibility = if (hasFolderConfigured) android.view.View.GONE else android.view.View.VISIBLE
-        romListView.visibility = if (hasFolderConfigured) android.view.View.VISIBLE else android.view.View.GONE
+        romRecyclerView.visibility = if (hasFolderConfigured) android.view.View.VISIBLE else android.view.View.GONE
         if (!hasFolderConfigured) emptyRomListText.visibility = android.view.View.GONE
         swipeRefreshLayout.isEnabled = hasFolderConfigured
     }
@@ -604,7 +601,8 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
-    private inner class RomAdapter : ArrayAdapter<String>(this, R.layout.list_item_rom, mutableListOf()) {
+    private inner class RomAdapter : RecyclerView.Adapter<RomAdapter.ViewHolder>() {
+        private val items = mutableListOf<String>()
         private val bgColors = intArrayOf(
             Color.parseColor("#0056EA"),
             Color.parseColor("#FEDF5A"),
@@ -612,20 +610,34 @@ class MainActivity : AppCompatActivity() {
             Color.parseColor("#D93131"),
         )
 
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val view = convertView ?: LayoutInflater.from(context)
-                .inflate(R.layout.list_item_rom, parent, false)
-            val tv = view.findViewById<TextView>(android.R.id.text1)
-            tv.text = getItem(position)
-            val bg = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(bgColors[position % 4])
-                cornerRadius = 24f
-            }
-            view.background = bg
-            tv.setTextColor(ContextCompat.getColor(context, R.color.rom_text_color))
-            return view
+        fun clear() { items.clear() }
+        fun addAll(newItems: List<String>) { items.addAll(newItems) }
+
+        inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val card: com.google.android.material.card.MaterialCardView =
+                itemView as com.google.android.material.card.MaterialCardView
+            val text: TextView = itemView.findViewById(R.id.romTitle)
         }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.list_item_rom, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            holder.text.text = items[position]
+            holder.card.setCardBackgroundColor(bgColors[position % 4])
+            holder.text.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.rom_text_color))
+            holder.itemView.setOnClickListener {
+                val pos = holder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    romEntries.getOrNull(pos)?.let(::bootSelectedRom)
+                }
+            }
+        }
+
+        override fun getItemCount() = items.size
     }
 
     private data class RomEntry(

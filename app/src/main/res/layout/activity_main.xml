@@ -62,14 +62,14 @@
                 android:visibility="visible" />
 
             <!-- Folder picked: game list -->
-            <ListView
-                android:id="@+id/romListView"
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/romRecyclerView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:divider="?attr/dividerHorizontal"
-                android:dividerHeight="1dp"
                 android:scrollbars="vertical"
-                android:fastScrollEnabled="true"
+                android:clipToPadding="false"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
                 android:visibility="gone" />
 
             <!-- Folder picked but no games found -->
