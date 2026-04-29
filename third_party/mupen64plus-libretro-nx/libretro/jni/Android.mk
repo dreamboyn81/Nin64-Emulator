@@ -38,6 +38,7 @@ ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
   HAVE_THR_AL = 1
 else ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
   WITH_DYNAREC := aarch64
+  HAVE_NEON := 1
   STRINGS := aarch64-linux-android-$(STRINGS)
   LLE = 1
   HAVE_PARALLEL_RSP = 1

@@ -474,8 +474,12 @@ else
 endif
 
 ifeq ($(HAVE_NEON),1)
+	COREFLAGS += -D__NEON_OPT
+	SOURCES_CXX := $(filter-out $(VIDEODIR_GLIDEN64)/src/CRC_OPT.cpp $(VIDEODIR_GLIDEN64)/src/RSP_LoadMatrix.cpp,$(SOURCES_CXX))
 	SOURCES_CXX   += $(VIDEODIR_GLIDEN64)/src/Neon/3DMathNeon.cpp \
-						  $(VIDEODIR_GLIDEN64)/src/Neon/gSPNeon.cpp
+						  $(VIDEODIR_GLIDEN64)/src/Neon/gSPNeon.cpp \
+						  $(VIDEODIR_GLIDEN64)/src/Neon/RSP_LoadMatrixNeon.cpp \
+						  $(VIDEODIR_GLIDEN64)/src/Neon/CRC_OPT_NEON.cpp
 
 	SOURCES_ASM += $(LIBRETRO_COMM_DIR)/audio/conversion/float_to_s16_neon.S \
 						$(LIBRETRO_COMM_DIR)/audio/conversion/s16_to_float_neon.S \
