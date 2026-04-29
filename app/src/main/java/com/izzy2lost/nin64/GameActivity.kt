@@ -3,18 +3,21 @@ package com.izzy2lost.nin64
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.graphics.PixelFormat
 import android.util.Log
 import android.os.Bundle
 import android.os.Process
 import android.view.Gravity
 import android.view.InputDevice
+import android.view.View
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.math.abs
@@ -26,21 +29,30 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
     private lateinit var rootContainer: FrameLayout
     private lateinit var surfaceView: SurfaceView
+    private lateinit var touchControlsView: TouchControlsView
+    private lateinit var visibilityToggle: ImageButton
+    private lateinit var controlsConfig: ControlsConfig
+    private var touchControlsVisible = true
 
     @Volatile private var running = false
     private var emulationThread: Thread? = null
     private var keyButtonMask = 0
     private var axisButtonMask = 0
+    private var touchButtonMask = 0
     private var analogStickX = 0
     private var analogStickY = 0
+    private var touchAnalogStickX = 0
+    private var touchAnalogStickY = 0
 
     private val rootPath: String get() = intent.getStringExtra(EXTRA_ROOT_PATH) ?: ""
     private val romPath: String get() = intent.getStringExtra(EXTRA_ROM_PATH) ?: ""
     private val useTexturePack: Boolean get() = intent.getBooleanExtra(EXTRA_USE_TEXTURE_PACK, false)
     private val disableExpansionPak: Boolean get() = intent.getBooleanExtra(EXTRA_DISABLE_EXPANSION_PAK, false)
+    private val romPreferenceKey: String? get() = intent.getStringExtra(EXTRA_ROM_PREFERENCE_KEY)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        controlsConfig = ControlsRepository.load(this, romPreferenceKey)
 
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
@@ -66,6 +78,44 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
                 Gravity.CENTER
             )
         )
+        touchControlsView = TouchControlsView(this).apply {
+            layout = controlsConfig.touchLayout
+            onTouchStateChanged = { buttonMask, stickX, stickY ->
+                touchButtonMask = buttonMask
+                touchAnalogStickX = stickX
+                touchAnalogStickY = stickY
+                pushControllerState()
+            }
+        }
+        rootContainer.addView(
+            touchControlsView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+            )
+        )
+
+        val density = resources.displayMetrics.density
+        val btnSize = (44 * density).toInt()
+        val btnMargin = (14 * density).toInt()
+        visibilityToggle = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_visibility)
+            setColorFilter(Color.WHITE)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(160, 14, 15, 20))
+            }
+            setOnClickListener { toggleTouchControls() }
+        }
+        rootContainer.addView(
+            visibilityToggle,
+            FrameLayout.LayoutParams(btnSize, btnSize, Gravity.BOTTOM or Gravity.END).apply {
+                bottomMargin = btnMargin
+                marginEnd = btnMargin
+            }
+        )
+
         setContentView(rootContainer)
         surfaceView.holder.addCallback(this)
         pushControllerState()
@@ -205,27 +255,19 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
         val device = event.device ?: return super.dispatchGenericMotionEvent(event)
 
-        analogStickX = scaleStickAxis(event, device, MotionEvent.AXIS_X, positiveUp = false)
-        analogStickY = scaleStickAxis(event, device, MotionEvent.AXIS_Y, positiveUp = true)
-
-        val rightX = getAxisValue(event, device, MotionEvent.AXIS_Z, MotionEvent.AXIS_RX)
-        val rightY = getAxisValue(event, device, MotionEvent.AXIS_RZ, MotionEvent.AXIS_RY)
-        val hatX = getAxisValue(event, device, MotionEvent.AXIS_HAT_X)
-        val hatY = getAxisValue(event, device, MotionEvent.AXIS_HAT_Y)
-        val leftTrigger = maxTriggerValue(event, device, MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE)
-
-        axisButtonMask = 0
-        if (hatX <= -HAT_THRESHOLD) axisButtonMask = axisButtonMask or N64_DPAD_LEFT
-        if (hatX >= HAT_THRESHOLD) axisButtonMask = axisButtonMask or N64_DPAD_RIGHT
-        if (hatY <= -HAT_THRESHOLD) axisButtonMask = axisButtonMask or N64_DPAD_UP
-        if (hatY >= HAT_THRESHOLD) axisButtonMask = axisButtonMask or N64_DPAD_DOWN
-
-        if (rightX <= -C_BUTTON_THRESHOLD) axisButtonMask = axisButtonMask or N64_C_LEFT
-        if (rightX >= C_BUTTON_THRESHOLD) axisButtonMask = axisButtonMask or N64_C_RIGHT
-        if (rightY <= -C_BUTTON_THRESHOLD) axisButtonMask = axisButtonMask or N64_C_UP
-        if (rightY >= C_BUTTON_THRESHOLD) axisButtonMask = axisButtonMask or N64_C_DOWN
-
-        if (leftTrigger >= TRIGGER_THRESHOLD) axisButtonMask = axisButtonMask or N64_Z_TRIGGER
+        analogStickX = scaleStickAxes(
+            event = event,
+            device = device,
+            axes = controlsConfig.gamepadMapping.analogXAxes,
+            positiveUp = false
+        )
+        analogStickY = scaleStickAxes(
+            event = event,
+            device = device,
+            axes = controlsConfig.gamepadMapping.analogYAxes,
+            positiveUp = true
+        )
+        axisButtonMask = mapGamepadAxesToN64ButtonMask(event, device)
 
         pushControllerState()
         return true
@@ -279,30 +321,46 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
     }
 
     private fun pushControllerState() {
+        val gamepadMagnitude = (analogStickX * analogStickX) + (analogStickY * analogStickY)
+        val touchMagnitude = (touchAnalogStickX * touchAnalogStickX) + (touchAnalogStickY * touchAnalogStickY)
+        val stickX = if (touchMagnitude > gamepadMagnitude) touchAnalogStickX else analogStickX
+        val stickY = if (touchMagnitude > gamepadMagnitude) touchAnalogStickY else analogStickY
+
         NativeBridge.setControllerState(
-            keyButtonMask or axisButtonMask,
-            analogStickX,
-            analogStickY
+            keyButtonMask or axisButtonMask or touchButtonMask,
+            stickX,
+            stickY
         )
     }
 
-    private fun mapGamepadKeyToN64Button(keyCode: Int): Int = when (keyCode) {
-        KeyEvent.KEYCODE_DPAD_UP -> N64_DPAD_UP
-        KeyEvent.KEYCODE_DPAD_DOWN -> N64_DPAD_DOWN
-        KeyEvent.KEYCODE_DPAD_LEFT -> N64_DPAD_LEFT
-        KeyEvent.KEYCODE_DPAD_RIGHT -> N64_DPAD_RIGHT
-        KeyEvent.KEYCODE_BUTTON_A -> N64_A_BUTTON
-        KeyEvent.KEYCODE_BUTTON_B -> N64_B_BUTTON
-        KeyEvent.KEYCODE_BUTTON_X -> N64_C_UP
-        KeyEvent.KEYCODE_BUTTON_Y -> N64_C_LEFT
-        KeyEvent.KEYCODE_BUTTON_START -> N64_START
-        KeyEvent.KEYCODE_BUTTON_L1 -> N64_L_TRIGGER
-        KeyEvent.KEYCODE_BUTTON_R1 -> N64_R_TRIGGER
-        KeyEvent.KEYCODE_BUTTON_L2 -> N64_Z_TRIGGER
-        KeyEvent.KEYCODE_BUTTON_R2 -> N64_C_RIGHT
-        KeyEvent.KEYCODE_BUTTON_THUMBR -> N64_C_DOWN
-        KeyEvent.KEYCODE_BUTTON_Z -> N64_Z_TRIGGER
-        else -> 0
+    private fun mapGamepadKeyToN64Button(keyCode: Int): Int {
+        var mask = 0
+        controlsConfig.gamepadMapping.targetBindings.forEach { (target, bindings) ->
+            if (bindings.any { it.type == BindingType.KEY && it.code == keyCode }) {
+                mask = mask or target.buttonMask
+            }
+        }
+        return mask
+    }
+
+    private fun mapGamepadAxesToN64ButtonMask(event: MotionEvent, device: InputDevice): Int {
+        var mask = 0
+        controlsConfig.gamepadMapping.targetBindings.forEach { (target, bindings) ->
+            for (binding in bindings) {
+                if (binding.type != BindingType.AXIS) continue
+                val value = getAxisValue(event, device, binding.code)
+                val pressed = if (binding.direction < 0) {
+                    value <= -AXIS_BUTTON_THRESHOLD
+                } else {
+                    value >= AXIS_BUTTON_THRESHOLD
+                }
+                if (pressed) {
+                    mask = mask or target.buttonMask
+                    break
+                }
+            }
+        }
+        return mask
     }
 
     private fun isGamepadSource(source: Int): Boolean {
@@ -310,15 +368,31 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
             (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
     }
 
-    private fun scaleStickAxis(
+    private fun scaleStickAxes(
         event: MotionEvent,
         device: InputDevice,
-        axis: Int,
+        axes: List<Int>,
         positiveUp: Boolean
     ): Int {
-        val value = getAxisValue(event, device, axis)
+        val value = getAxisValue(event, device, axes)
         val scaled = (if (positiveUp) -value else value) * STICK_MAX
         return scaled.roundToInt().coerceIn(-STICK_MAX, STICK_MAX)
+    }
+
+    private fun getAxisValue(event: MotionEvent, device: InputDevice, axes: List<Int>): Float {
+        var bestValue = 0f
+        var bestMagnitude = 0f
+
+        for (axis in axes) {
+            val value = getAxisValue(event, device, axis)
+            val magnitude = abs(value)
+            if (magnitude > bestMagnitude) {
+                bestMagnitude = magnitude
+                bestValue = value
+            }
+        }
+
+        return bestValue
     }
 
     private fun getAxisValue(event: MotionEvent, device: InputDevice, vararg axes: Int): Float {
@@ -339,23 +413,25 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
         return bestValue
     }
 
-    private fun maxTriggerValue(event: MotionEvent, device: InputDevice, vararg axes: Int): Float {
-        var maxValue = 0f
-        for (axis in axes) {
-            val range = getMotionRange(device, axis, event.source) ?: continue
-            val value = event.getAxisValue(axis)
-            if (value > range.flat && value > maxValue) {
-                maxValue = value
-            }
-        }
-        return maxValue
-    }
-
     private fun getMotionRange(device: InputDevice, axis: Int, source: Int): InputDevice.MotionRange? {
         return device.getMotionRange(axis, source)
             ?: device.getMotionRange(axis, InputDevice.SOURCE_JOYSTICK)
             ?: device.getMotionRange(axis, InputDevice.SOURCE_GAMEPAD)
             ?: device.getMotionRange(axis)
+    }
+
+    private fun toggleTouchControls() {
+        touchControlsVisible = !touchControlsVisible
+        touchControlsView.visibility = if (touchControlsVisible) View.VISIBLE else View.GONE
+        visibilityToggle.setImageResource(
+            if (touchControlsVisible) R.drawable.ic_visibility else R.drawable.ic_visibility_off
+        )
+        if (!touchControlsVisible) {
+            touchButtonMask = 0
+            touchAnalogStickX = 0
+            touchAnalogStickY = 0
+            pushControllerState()
+        }
     }
 
     @Suppress("OVERRIDE_DEPRECATION")
@@ -367,8 +443,11 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
     override fun onDestroy() {
         keyButtonMask = 0
         axisButtonMask = 0
+        touchButtonMask = 0
         analogStickX = 0
         analogStickY = 0
+        touchAnalogStickX = 0
+        touchAnalogStickY = 0
         pushControllerState()
         stopEmulation()
         NativeBridge.clearSurface()
@@ -380,33 +459,18 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
         private const val EXTRA_ROM_PATH = "extra_rom_path"
         private const val EXTRA_USE_TEXTURE_PACK = "extra_use_texture_pack"
         private const val EXTRA_DISABLE_EXPANSION_PAK = "extra_disable_expansion_pak"
+        private const val EXTRA_ROM_PREFERENCE_KEY = "extra_rom_preference_key"
         private const val OPS_PER_CHUNK = 2_000_000
         private const val STICK_MAX = 80
-        private const val C_BUTTON_THRESHOLD = 0.5f
-        private const val HAT_THRESHOLD = 0.5f
-        private const val TRIGGER_THRESHOLD = 0.35f
-
-        private const val N64_A_BUTTON = 0x0080
-        private const val N64_B_BUTTON = 0x0040
-        private const val N64_Z_TRIGGER = 0x0020
-        private const val N64_START = 0x0010
-        private const val N64_DPAD_UP = 0x0008
-        private const val N64_DPAD_DOWN = 0x0004
-        private const val N64_DPAD_LEFT = 0x0002
-        private const val N64_DPAD_RIGHT = 0x0001
-        private const val N64_L_TRIGGER = 0x2000
-        private const val N64_R_TRIGGER = 0x1000
-        private const val N64_C_UP = 0x0800
-        private const val N64_C_DOWN = 0x0400
-        private const val N64_C_LEFT = 0x0200
-        private const val N64_C_RIGHT = 0x0100
+        private const val AXIS_BUTTON_THRESHOLD = 0.45f
 
         fun launch(
             context: Context,
             rootPath: String,
             romPath: String,
             useTexturePack: Boolean = false,
-            disableExpansionPak: Boolean = false
+            disableExpansionPak: Boolean = false,
+            romPreferenceKey: String? = null
         ) {
             context.startActivity(
                 Intent(context, GameActivity::class.java)
@@ -414,6 +478,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
                     .putExtra(EXTRA_ROM_PATH, romPath)
                     .putExtra(EXTRA_USE_TEXTURE_PACK, useTexturePack)
                     .putExtra(EXTRA_DISABLE_EXPANSION_PAK, disableExpansionPak)
+                    .putExtra(EXTRA_ROM_PREFERENCE_KEY, romPreferenceKey)
             )
         }
     }

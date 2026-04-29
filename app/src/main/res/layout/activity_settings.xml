@@ -116,6 +116,40 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:text="@string/settings_controls_header"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/editTouchLayoutButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/controls_edit_touch_layout" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/editControllerMappingButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/controls_edit_controller_mapping" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/resetControlsButton"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/controls_reset_controls" />
+
         </LinearLayout>
 
     </ScrollView>

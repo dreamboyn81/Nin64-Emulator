@@ -25,6 +25,7 @@
     <string name="game_options_remove_texture_pack">Remove Texture Pack</string>
     <string name="game_options_disable_expansion_pak">Disable Expansion Pak</string>
     <string name="game_options_enable_expansion_pak">Enable Expansion Pak</string>
+    <string name="game_options_configure_controls">Configure Controls</string>
     <string name="texture_pack_importing">Importing %1$s...</string>
     <string name="texture_pack_imported">Imported %1$s for %2$s.</string>
     <string name="texture_pack_import_failed">Texture pack import failed: %1$s</string>
@@ -45,6 +46,29 @@
     <string name="settings_display_header">Display</string>
     <string name="settings_aspect_label">Aspect Ratio</string>
     <string name="settings_resolution_label">Internal Resolution</string>
+    <string name="settings_controls_header">Controls</string>
+    <string name="controls_edit_touch_layout">Edit Touch Layout</string>
+    <string name="controls_edit_controller_mapping">Edit Controller Mapping</string>
+    <string name="controls_reset_controls">Reset Controls</string>
+    <string name="controls_touch_layout">Touch Layout</string>
+    <string name="controls_controller_mapping">Controller Mapping</string>
+    <string name="controls_game_controls">Game Controls</string>
+    <string name="controls_control">Control</string>
+    <string name="controls_target">Target</string>
+    <string name="controls_visible">Visible</string>
+    <string name="controls_size">Size</string>
+    <string name="controls_opacity">Opacity</string>
+    <string name="controls_unbound">Unbound</string>
+    <string name="controls_controller_capture_idle">Tap a target, then press a controller button or move an axis.</string>
+    <string name="controls_controller_capture_waiting">Listening for %1$s...</string>
+    <string name="controls_controller_capture_axis_needed">Move a stick or axis for %1$s.</string>
+    <string name="controls_controller_capture_saved">Binding saved.</string>
+    <string name="controls_controller_analog_summary">X: %1$s  Y: %2$s</string>
+    <string name="controls_global_reset_done">Controls reset to defaults.</string>
+    <string name="controls_per_game_reset_done">Per-game controls reset.</string>
+    <string name="controls_capture_button">Press a button…</string>
+    <string name="controls_capture_stick">Move a stick…</string>
+    <string name="done">Done</string>
     <!-- Compat strings still used in code -->
     <string name="initial_status">Ready.</string>
     <string name="running_task">Running…</string>

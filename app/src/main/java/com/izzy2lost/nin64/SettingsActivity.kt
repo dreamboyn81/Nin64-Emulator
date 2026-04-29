@@ -9,6 +9,7 @@ import android.widget.ArrayAdapter
 import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
@@ -69,6 +70,17 @@ class SettingsActivity : AppCompatActivity() {
             prefKey = PREF_RES_FACTOR,
             defaultValue = DEFAULT_RES_FACTOR
         )
+
+        findViewById<MaterialButton>(R.id.editTouchLayoutButton).setOnClickListener {
+            TouchLayoutActivity.launch(this)
+        }
+        findViewById<MaterialButton>(R.id.editControllerMappingButton).setOnClickListener {
+            GamepadMappingActivity.launch(this)
+        }
+        findViewById<MaterialButton>(R.id.resetControlsButton).setOnClickListener {
+            ControlsRepository.resetGlobal(this)
+            Toast.makeText(this, R.string.controls_global_reset_done, Toast.LENGTH_SHORT).show()
+        }
 
         updateFolderDisplay()
     }
