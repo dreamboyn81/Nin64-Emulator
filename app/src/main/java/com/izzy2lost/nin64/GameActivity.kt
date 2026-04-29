@@ -157,7 +157,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
                 marginStart = btnMargin
             }
         )
-        menuButton.applySafeAreaMargins(applyStart = true, applyTop = true)
+        menuButton.applySafeAreaMargins(applyTop = true)
 
         fastForwardButton = ImageButton(this).apply {
             setImageResource(R.drawable.fast_forward_24px)
