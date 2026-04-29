@@ -45,7 +45,7 @@
     <!-- Settings: video -->
     <string name="settings_display_header">Display</string>
     <string name="settings_aspect_label">Aspect Ratio</string>
-    <string name="settings_resolution_label">Internal Resolution</string>
+    <string name="settings_resolution_label">Render Resolution</string>
     <string name="settings_controls_header">Controls</string>
     <string name="controls_edit_touch_layout">Edit Touch Layout</string>
     <string name="controls_edit_controller_mapping">Edit Controller Mapping</string>

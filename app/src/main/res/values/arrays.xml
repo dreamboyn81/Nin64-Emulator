@@ -3,9 +3,9 @@
 
     <!-- mupen64plus-aspect: shown labels -->
     <string-array name="aspect_labels">
-        <item>4:3 (original)</item>
-        <item>16:9 (stretched)</item>
-        <item>16:9 (adjusted)</item>
+        <item>4:3 (match device)</item>
+        <item>Match screen (stretched)</item>
+        <item>Match screen (widescreen)</item>
     </string-array>
     <!-- mupen64plus-aspect: values passed to the core -->
     <string-array name="aspect_values">
@@ -21,7 +21,9 @@
         <item>2x</item>
         <item>3x</item>
         <item>4x</item>
+        <item>5x</item>
         <item>6x</item>
+        <item>7x</item>
         <item>8x</item>
     </string-array>
     <!-- mupen64plus-EnableNativeResFactor: values passed to the core -->
@@ -31,7 +33,9 @@
         <item>2</item>
         <item>3</item>
         <item>4</item>
+        <item>5</item>
         <item>6</item>
+        <item>7</item>
         <item>8</item>
     </string-array>
 
