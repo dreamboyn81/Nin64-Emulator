@@ -1,6 +1,7 @@
 package com.izzy2lost.nin64
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -12,8 +13,10 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -39,8 +42,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var pickFolderButton: android.widget.Button
     private lateinit var emptyRomListText: TextView
-    private lateinit var romAdapter: RomAdapter
+    private lateinit var viewToggleButton: ImageButton
+    private lateinit var listAdapter: ListAdapter
+    private lateinit var gridAdapter: GridAdapter
     private val romEntries = mutableListOf<RomEntry>()
+    private var viewMode: String = VIEW_MODE_LIST
 
     private val prefs by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -97,10 +103,17 @@ class MainActivity : AppCompatActivity() {
 
         pickFolderButton = findViewById(R.id.pickFolderButton)
         emptyRomListText = findViewById(R.id.emptyRomListText)
+        viewToggleButton = findViewById(R.id.viewToggleButton)
 
-        romAdapter = RomAdapter()
-        romRecyclerView.layoutManager = LinearLayoutManager(this)
-        romRecyclerView.adapter = romAdapter
+        listAdapter = ListAdapter()
+        gridAdapter = GridAdapter()
+
+        CoverMatcher.init(this, "$COVER_BASE_URL/index.txt")
+
+        viewMode = prefs.getString(PREF_VIEW_MODE, VIEW_MODE_LIST) ?: VIEW_MODE_LIST
+        applyViewMode()
+
+        viewToggleButton.setOnClickListener { toggleViewMode() }
 
         updateRomFolderLabel(readSavedRomFolderUri())
         updateGamesHeader(0)
@@ -162,14 +175,12 @@ class MainActivity : AppCompatActivity() {
                 result.onSuccess { roms ->
                     romEntries.clear()
                     romEntries.addAll(roms)
-                    romAdapter.clear()
-                    romAdapter.addAll(roms.map { it.listLabel() })
-                    romAdapter.notifyDataSetChanged()
+                    romRecyclerView.adapter?.notifyDataSetChanged()
                     updateGamesHeader(roms.size)
                     emptyRomListText.visibility = if (roms.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
                 }.onFailure { error ->
                     romEntries.clear()
-                    romAdapter.clear()
+                    romRecyclerView.adapter?.notifyDataSetChanged()
                     updateGamesHeader(0)
                     statusText.text = error.stackTraceToString()
                 }
@@ -482,17 +493,39 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
-    private inner class RomAdapter : RecyclerView.Adapter<RomAdapter.ViewHolder>() {
-        private val items = mutableListOf<String>()
+    private fun applyViewMode() {
+        when (viewMode) {
+            VIEW_MODE_GRID -> {
+                romRecyclerView.layoutManager = GridLayoutManager(this, gridSpanCount())
+                romRecyclerView.adapter = gridAdapter
+                viewToggleButton.setImageResource(R.drawable.ic_view_list)
+                viewToggleButton.contentDescription = getString(R.string.switch_to_list)
+            }
+            else -> {
+                romRecyclerView.layoutManager = LinearLayoutManager(this)
+                romRecyclerView.adapter = listAdapter
+                viewToggleButton.setImageResource(R.drawable.ic_view_grid)
+                viewToggleButton.contentDescription = getString(R.string.switch_to_grid)
+            }
+        }
+    }
+
+    private fun gridSpanCount(): Int =
+        if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 4 else 2
+
+    private fun toggleViewMode() {
+        viewMode = if (viewMode == VIEW_MODE_LIST) VIEW_MODE_GRID else VIEW_MODE_LIST
+        prefs.edit().putString(PREF_VIEW_MODE, viewMode).apply()
+        applyViewMode()
+    }
+
+    private inner class ListAdapter : RecyclerView.Adapter<ListAdapter.ViewHolder>() {
         private val bgColors = intArrayOf(
             Color.parseColor("#0056EA"),
             Color.parseColor("#FEDF5A"),
             Color.parseColor("#00C063"),
             Color.parseColor("#D93131"),
         )
-
-        fun clear() { items.clear() }
-        fun addAll(newItems: List<String>) { items.addAll(newItems) }
 
         inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             val card: com.google.android.material.card.MaterialCardView =
@@ -507,7 +540,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            holder.text.text = items[position]
+            val entry = romEntries[position]
+            holder.text.text = entry.listLabel()
             holder.card.setCardBackgroundColor(bgColors[position % 4])
             holder.text.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.rom_text_color))
             holder.itemView.setOnClickListener {
@@ -518,7 +552,60 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        override fun getItemCount() = items.size
+        override fun getItemCount() = romEntries.size
+    }
+
+    private inner class GridAdapter : RecyclerView.Adapter<GridAdapter.ViewHolder>() {
+
+        inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val cover: ImageView = itemView.findViewById(R.id.coverImage)
+            val fallback: TextView = itemView.findViewById(R.id.fallbackTitle)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_rom_grid, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            // Recompute height on every bind so recycled holders get the right size after rotation.
+            val rv = romRecyclerView
+            val spanCount = (rv.layoutManager as? GridLayoutManager)?.spanCount ?: gridSpanCount()
+            val rvWidth = (rv.width - rv.paddingStart - rv.paddingEnd).takeIf { it > 0 }
+                ?: resources.displayMetrics.widthPixels
+            val cellHeight = (rvWidth / spanCount / 1.21f).toInt().coerceAtLeast(1)
+            holder.itemView.layoutParams = holder.itemView.layoutParams.apply {
+                height = cellHeight
+            }
+
+            val entry = romEntries[position]
+            holder.fallback.text = entry.displayName
+
+            val stem = entry.fileName.substringBeforeLast('.', entry.fileName)
+            val coverFile = CoverMatcher.resolve(entry.fileName) ?: "$stem.png"
+            val url = "$COVER_BASE_URL/${Uri.encode(coverFile)}"
+
+            holder.fallback.visibility = View.VISIBLE
+            holder.cover.load(url) {
+                crossfade(true)
+                placeholder(R.drawable.logo)
+                error(R.drawable.logo)
+                listener(
+                    onSuccess = { _, _ -> holder.fallback.visibility = View.GONE },
+                    onError = { _, _ -> holder.fallback.visibility = View.VISIBLE },
+                )
+            }
+
+            holder.itemView.setOnClickListener {
+                val pos = holder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    romEntries.getOrNull(pos)?.let(::bootSelectedRom)
+                }
+            }
+        }
+
+        override fun getItemCount() = romEntries.size
     }
 
     private data class RomEntry(
@@ -540,7 +627,14 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS_NAME = "nin64_prefs"
         private const val PREF_ROM_FOLDER_URI = "rom_folder_uri"
+        private const val PREF_VIEW_MODE = "view_mode"
         private const val EXTRA_BOOT_ROM_PATH = "bootRomPath"
+
+        private const val VIEW_MODE_LIST = "list"
+        private const val VIEW_MODE_GRID = "grid"
+
+        private const val COVER_BASE_URL =
+            "https://raw.githubusercontent.com/izzy2lost/n64_covers/main"
 
         private val ROM_EXTENSIONS = setOf("z64", "n64", "v64", "rom", "bin")
     }
