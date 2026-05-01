@@ -7,7 +7,8 @@ object NativeBridge {
         System.loadLibrary("nin64_core")
     }
 
-    external fun bootRomForPlay(rootPath: String, romPath: String): String
+    external fun bootRomForPlay(rootPath: String, romPath: String, saveKey: String): String
+    external fun flushInGameSave(): String
     external fun runFrame(ops: Int)
     external fun getFrameWidth(): Int
     external fun getFrameHeight(): Int

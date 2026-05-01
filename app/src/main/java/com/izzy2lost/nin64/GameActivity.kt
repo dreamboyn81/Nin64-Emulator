@@ -52,6 +52,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
     private var fastForwardEnabled = false
     private var menuOverlay: View? = null
     private var currentSlot = 1
+    private var lastInGameSaveFlushTimeMs = 0L
 
     @Volatile private var running = false
     @Volatile private var paused = false
@@ -233,13 +234,18 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
         updateSurfaceLayoutForCurrentFrame()
     }
 
+    override fun onPause() {
+        requestInGameSaveFlush()
+        super.onPause()
+    }
+
     private fun startEmulation() {
         running = true
         emulationThread = Thread {
             Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
             try {
                 Log.i(logTag, "emulation thread boot start")
-                val bootResult = NativeBridge.bootRomForPlay(rootPath, romPath)
+                val bootResult = NativeBridge.bootRomForPlay(rootPath, romPath, inGameSaveKey())
                 Log.i(logTag, "boot result=$bootResult")
                 if (bootResult != "booted") {
                     running = false
@@ -250,6 +256,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
                     return@Thread
                 }
 
+                lastInGameSaveFlushTimeMs = System.currentTimeMillis()
                 applyEnabledCheats()
                 updateSurfaceLayoutForCurrentFrame()
                 emulationLoop()
@@ -308,7 +315,20 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
             runPendingEmulationTasks()
             if (paused) { Thread.sleep(16); continue }
             NativeBridge.runFrame(OPS_PER_CHUNK)
+            maybeFlushInGameSave()
         }
+    }
+
+    private fun maybeFlushInGameSave() {
+        val now = System.currentTimeMillis()
+        if (now - lastInGameSaveFlushTimeMs < IN_GAME_SAVE_FLUSH_INTERVAL_MS) return
+        lastInGameSaveFlushTimeMs = now
+        NativeBridge.flushInGameSave()
+    }
+
+    private fun requestInGameSaveFlush() {
+        if (!running) return
+        enqueueEmulationTask { NativeBridge.flushInGameSave() }
     }
 
     private fun enqueueEmulationTask(task: () -> Unit) {
@@ -797,6 +817,8 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
         return safe.ifBlank { "game" }
     }
 
+    private fun inGameSaveKey(): String = stateBaseName()
+
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).roundToInt()
 
     @Suppress("OVERRIDE_DEPRECATION")
@@ -823,6 +845,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
         private const val EXTRA_ROM_PREFERENCE_KEY = "extra_rom_preference_key"
         private const val EXTRA_ROM_CRC = "extra_rom_crc"
         private const val OPS_PER_CHUNK = 2_000_000
+        private const val IN_GAME_SAVE_FLUSH_INTERVAL_MS = 15_000L
         private const val STICK_MAX = 80
         private const val AXIS_BUTTON_THRESHOLD = 0.45f
         private const val SAVE_SLOT_COUNT = 10

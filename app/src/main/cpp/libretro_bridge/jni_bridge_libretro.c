@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
 
 #include "libretro.h"
@@ -63,6 +65,8 @@ typedef unsigned (*retro_api_version_fn)(void);
 typedef void (*retro_deinit_fn)(void);
 typedef void (*retro_get_system_av_info_fn)(struct retro_system_av_info *info);
 typedef void (*retro_get_system_info_fn)(struct retro_system_info *info);
+typedef void *(*retro_get_memory_data_fn)(unsigned id);
+typedef size_t (*retro_get_memory_size_fn)(unsigned id);
 typedef void (*retro_init_fn)(void);
 typedef bool (*retro_load_game_fn)(const struct retro_game_info *game);
 typedef void (*retro_run_fn)(void);
@@ -95,6 +99,8 @@ typedef struct LibretroBridge {
     uint64_t frame_interval_ns;
     uint64_t next_frame_deadline_ns;
     char root_path[1024];
+    char save_dir_path[1024];
+    char save_memory_path[1024];
     char last_error[512];
     char last_rom_path[1024];
     char option_43screensize[32];
@@ -125,6 +131,8 @@ typedef struct LibretroBridge {
     EGLSurface egl_surface;
     retro_api_version_fn retro_api_version;
     retro_deinit_fn retro_deinit;
+    retro_get_memory_data_fn retro_get_memory_data;
+    retro_get_memory_size_fn retro_get_memory_size;
     retro_get_system_av_info_fn retro_get_system_av_info;
     retro_get_system_info_fn retro_get_system_info;
     retro_init_fn retro_init;
@@ -185,6 +193,7 @@ static int bridge_save_state_to_path(const char *path);
 static char *bridge_strdup(const char *src);
 static uintptr_t bridge_get_current_framebuffer(void);
 static retro_proc_address_t bridge_get_proc_address(const char *sym);
+static int bridge_build_save_memory_path(const char *root_path, const char *save_key, const char *rom_path);
 static int bridge_hw_activate(unsigned surface_generation);
 static void bridge_hw_clear_request_state(void);
 static int bridge_hw_context_is_supported(const struct retro_hw_render_callback *hw_render);
@@ -194,7 +203,7 @@ static int bridge_hw_make_current_snapshot(EGLDisplay display, EGLSurface surfac
 static int bridge_hw_present(unsigned width, unsigned height);
 static int16_t bridge_input_state(unsigned port, unsigned device, unsigned index, unsigned id);
 static int bridge_initialize(const char *root_path);
-static int bridge_load_game_from_path(const char *root_path, const char *rom_path);
+static int bridge_load_game_from_path(const char *root_path, const char *rom_path, const char *save_key);
 static int bridge_load_rom_file(const char *path, void **data_out, size_t *size_out);
 static int bridge_load_symbols(void);
 static void bridge_log(enum retro_log_level level, const char *fmt, ...);
@@ -216,6 +225,9 @@ static void bridge_set_surface_from_java(JNIEnv *env, jobject surface, jint widt
 static void bridge_shutdown(void);
 static void bridge_sleep_until_ns(uint64_t deadline_ns);
 static int bridge_load_state_from_path(const char *path);
+static int bridge_load_save_memory_from_path(void);
+static int bridge_save_memory_to_path(void);
+static int bridge_sanitize_filename_component(const char *src, char *dest, size_t dest_size);
 static void bridge_unload_game(void);
 static void bridge_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch);
 static void copy_jstring(JNIEnv *env, jstring value, char *buffer, size_t buffer_size);
@@ -241,6 +253,123 @@ static void copy_jstring(JNIEnv *env, jstring value, char *buffer, size_t buffer
 
     snprintf(buffer, buffer_size, "%s", utf);
     (*env)->ReleaseStringUTFChars(env, value, utf);
+}
+
+static int bridge_join_path(char *dest, size_t dest_size, const char *base, const char *child)
+{
+    const char *separator;
+
+    if (!dest || dest_size == 0 || !base || !base[0] || !child || !child[0]) {
+        return 0;
+    }
+
+    separator = (base[strlen(base) - 1] == '/' || base[strlen(base) - 1] == '\\') ? "" : "/";
+    return snprintf(dest, dest_size, "%s%s%s", base, separator, child) < (int)dest_size;
+}
+
+static int bridge_ensure_directory(const char *path)
+{
+    if (!path || !path[0]) {
+        bridge_set_error("Directory path is empty.");
+        return 0;
+    }
+
+    if (mkdir(path, 0775) == 0 || errno == EEXIST) {
+        return 1;
+    }
+
+    bridge_set_error("Unable to create directory %s: %s", path, strerror(errno));
+    return 0;
+}
+
+static int bridge_sanitize_filename_component(const char *src, char *dest, size_t dest_size)
+{
+    const char *base;
+    const char *scan;
+    const char *dot;
+    size_t src_len;
+    size_t out_len = 0;
+
+    if (!src || !src[0] || !dest || dest_size == 0) {
+        return 0;
+    }
+
+    base = src;
+    for (scan = src; *scan; ++scan) {
+        if (*scan == '/' || *scan == '\\') {
+            base = scan + 1;
+        }
+    }
+
+    if (!base[0]) {
+        return 0;
+    }
+
+    dot = strrchr(base, '.');
+    src_len = (dot && dot > base) ? (size_t)(dot - base) : strlen(base);
+
+    for (size_t i = 0; i < src_len && out_len + 1 < dest_size; ++i) {
+        char c = base[i];
+        if ((c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') ||
+            c == '.' ||
+            c == '_' ||
+            c == '-') {
+            dest[out_len++] = c;
+        } else {
+            dest[out_len++] = '_';
+        }
+    }
+
+    while (out_len > 0 && dest[out_len - 1] == '_') {
+        out_len--;
+    }
+
+    if (out_len == 0) {
+        snprintf(dest, dest_size, "%s", "game");
+        return 1;
+    }
+
+    dest[out_len] = 0;
+    return 1;
+}
+
+static int bridge_build_save_memory_path(const char *root_path, const char *save_key, const char *rom_path)
+{
+    char mupen_path[1024];
+    char safe_name[256];
+    const char *root = (root_path && root_path[0]) ? root_path : ".";
+    const char *key = (save_key && save_key[0]) ? save_key : rom_path;
+
+    if (snprintf(g_bridge.root_path, sizeof(g_bridge.root_path), "%s", root) >= (int)sizeof(g_bridge.root_path)) {
+        bridge_set_error("Root path is too long.");
+        return 0;
+    }
+
+    if (!bridge_join_path(mupen_path, sizeof(mupen_path), g_bridge.root_path, "Mupen64plus") ||
+        !bridge_join_path(g_bridge.save_dir_path, sizeof(g_bridge.save_dir_path), mupen_path, "saves")) {
+        bridge_set_error("Save directory path is too long.");
+        return 0;
+    }
+
+    if (!bridge_ensure_directory(mupen_path) || !bridge_ensure_directory(g_bridge.save_dir_path)) {
+        return 0;
+    }
+
+    if (!bridge_sanitize_filename_component(key, safe_name, sizeof(safe_name)) &&
+        !bridge_sanitize_filename_component(rom_path, safe_name, sizeof(safe_name))) {
+        snprintf(safe_name, sizeof(safe_name), "%s", "game");
+    }
+
+    if (snprintf(g_bridge.save_memory_path, sizeof(g_bridge.save_memory_path), "%s/%s.srm",
+            g_bridge.save_dir_path, safe_name) >= (int)sizeof(g_bridge.save_memory_path)) {
+        bridge_set_error("Save memory path is too long.");
+        return 0;
+    }
+
+    bridge_log(RETRO_LOG_INFO, "In-game save path: %s", g_bridge.save_memory_path);
+    return 1;
 }
 
 static void bridge_set_error(const char *fmt, ...)
@@ -1029,10 +1158,17 @@ static bool bridge_environment(unsigned cmd, void *data)
         return false;
 
     case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
-    case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
         if (data) {
             const char **path = (const char **)data;
             *path = g_bridge.root_path[0] ? g_bridge.root_path : ".";
+            return true;
+        }
+        return false;
+
+    case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
+        if (data) {
+            const char **path = (const char **)data;
+            *path = g_bridge.save_dir_path[0] ? g_bridge.save_dir_path : (g_bridge.root_path[0] ? g_bridge.root_path : ".");
             return true;
         }
         return false;
@@ -1416,6 +1552,8 @@ static int bridge_load_symbols(void)
 
     LOAD_SYMBOL(retro_api_version);
     LOAD_SYMBOL(retro_deinit);
+    LOAD_SYMBOL(retro_get_memory_data);
+    LOAD_SYMBOL(retro_get_memory_size);
     LOAD_SYMBOL(retro_get_system_av_info);
     LOAD_SYMBOL(retro_get_system_info);
     LOAD_SYMBOL(retro_init);
@@ -1569,6 +1707,12 @@ static void bridge_unload_game(void)
     audio_player_stop();
     
     if (g_bridge.game_loaded) {
+        if (!bridge_save_memory_to_path()) {
+            bridge_log(
+                RETRO_LOG_WARN,
+                "Failed to persist in-game save memory: %s",
+                g_bridge.last_error[0] ? g_bridge.last_error : "unknown error");
+        }
         g_bridge.retro_unload_game();
         g_bridge.game_loaded = 0;
     }
@@ -1587,13 +1731,17 @@ static uint64_t bridge_compute_frame_interval_ns(double fps)
     return (uint64_t)(1000000000.0 / fps);
 }
 
-static int bridge_load_game_from_path(const char *root_path, const char *rom_path)
+static int bridge_load_game_from_path(const char *root_path, const char *rom_path, const char *save_key)
 {
     struct retro_game_info game = {0};
 
     bridge_log(RETRO_LOG_INFO, "bridge_load_game_from_path rom=%s", rom_path ? rom_path : "(null)");
     bridge_shutdown();
     bridge_reset_video_state();
+
+    if (!bridge_build_save_memory_path(root_path, save_key, rom_path)) {
+        return 0;
+    }
 
     if (!bridge_initialize(root_path)) {
         return 0;
@@ -1618,6 +1766,10 @@ static int bridge_load_game_from_path(const char *root_path, const char *rom_pat
 
     g_bridge.game_loaded = 1;
     snprintf(g_bridge.last_rom_path, sizeof(g_bridge.last_rom_path), "%s", rom_path);
+    if (!bridge_load_save_memory_from_path()) {
+        bridge_unload_game();
+        return 0;
+    }
 
     memset(&g_bridge.av_info, 0, sizeof(g_bridge.av_info));
     g_bridge.retro_get_system_av_info(&g_bridge.av_info);
@@ -1744,6 +1896,150 @@ static int bridge_save_state_to_path(const char *path)
     remove(path);
     if (rename(temp_path, path) != 0) {
         bridge_set_error("Unable to move save state into place %s: %s", path, strerror(errno));
+        remove(temp_path);
+        return 0;
+    }
+
+    return 1;
+}
+
+static int bridge_get_save_memory(void **memory_out, size_t *size_out)
+{
+    void *memory;
+    size_t size;
+
+    if (!memory_out || !size_out) {
+        bridge_set_error("Invalid save memory output.");
+        return 0;
+    }
+
+    if (!g_bridge.retro_get_memory_data || !g_bridge.retro_get_memory_size) {
+        bridge_set_error("Core save memory functions are unavailable.");
+        return 0;
+    }
+
+    memory = g_bridge.retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    size = g_bridge.retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    if (!memory || size == 0) {
+        bridge_set_error("Core did not expose in-game save memory.");
+        return 0;
+    }
+
+    *memory_out = memory;
+    *size_out = size;
+    return 1;
+}
+
+static int bridge_load_save_memory_from_path(void)
+{
+    FILE *file;
+    void *memory = NULL;
+    size_t memory_size = 0;
+    size_t read_bytes;
+    long file_size;
+
+    if (!g_bridge.save_memory_path[0]) {
+        bridge_log(RETRO_LOG_WARN, "No in-game save path is configured.");
+        return 1;
+    }
+
+    file = fopen(g_bridge.save_memory_path, "rb");
+    if (!file) {
+        if (errno == ENOENT) {
+            bridge_log(RETRO_LOG_INFO, "No existing in-game save file for this game.");
+            return 1;
+        }
+        bridge_log(RETRO_LOG_WARN, "Unable to open in-game save file %s: %s", g_bridge.save_memory_path, strerror(errno));
+        return 1;
+    }
+
+    if (!bridge_get_save_memory(&memory, &memory_size)) {
+        fclose(file);
+        return 0;
+    }
+
+    if (fseek(file, 0, SEEK_END) != 0 ||
+        (file_size = ftell(file)) < 0 ||
+        fseek(file, 0, SEEK_SET) != 0) {
+        bridge_log(RETRO_LOG_WARN, "Unable to inspect in-game save file %s.", g_bridge.save_memory_path);
+        fclose(file);
+        return 1;
+    }
+
+    if ((size_t)file_size != memory_size) {
+        bridge_log(
+            RETRO_LOG_WARN,
+            "In-game save file size mismatch for %s. expected=%zu actual=%ld",
+            g_bridge.save_memory_path,
+            memory_size,
+            file_size);
+        fclose(file);
+        return 1;
+    }
+
+    read_bytes = fread(memory, 1u, memory_size, file);
+    if (ferror(file)) {
+        bridge_log(RETRO_LOG_WARN, "Unable to read in-game save file %s.", g_bridge.save_memory_path);
+        fclose(file);
+        return 1;
+    }
+
+    fclose(file);
+
+    if (read_bytes != memory_size) {
+        bridge_log(RETRO_LOG_WARN, "Unable to read complete in-game save file %s.", g_bridge.save_memory_path);
+        return 1;
+    }
+
+    bridge_log(RETRO_LOG_INFO, "Loaded in-game save memory (%zu bytes).", memory_size);
+    return 1;
+}
+
+static int bridge_save_memory_to_path(void)
+{
+    FILE *file = NULL;
+    void *memory = NULL;
+    size_t memory_size = 0;
+    size_t written;
+    char temp_path[1200];
+
+    if (!g_bridge.save_memory_path[0]) {
+        bridge_set_error("No in-game save path is configured.");
+        return 0;
+    }
+
+    if (!bridge_get_save_memory(&memory, &memory_size)) {
+        return 0;
+    }
+
+    if (snprintf(temp_path, sizeof(temp_path), "%s.tmp", g_bridge.save_memory_path) >= (int)sizeof(temp_path)) {
+        bridge_set_error("In-game save temp path is too long.");
+        return 0;
+    }
+
+    file = fopen(temp_path, "wb");
+    if (!file) {
+        bridge_set_error("Unable to open in-game save temp file %s: %s", temp_path, strerror(errno));
+        return 0;
+    }
+
+    written = fwrite(memory, 1u, memory_size, file);
+    if (written != memory_size) {
+        bridge_set_error("Unable to write complete in-game save to %s.", temp_path);
+        fclose(file);
+        remove(temp_path);
+        return 0;
+    }
+
+    if (fclose(file) != 0) {
+        bridge_set_error("Unable to close in-game save temp file %s: %s", temp_path, strerror(errno));
+        remove(temp_path);
+        return 0;
+    }
+
+    remove(g_bridge.save_memory_path);
+    if (rename(temp_path, g_bridge.save_memory_path) != 0) {
+        bridge_set_error("Unable to move in-game save into place %s: %s", g_bridge.save_memory_path, strerror(errno));
         remove(temp_path);
         return 0;
     }
@@ -1908,20 +2204,23 @@ Java_com_izzy2lost_nin64_NativeBridge_bootRomForPlay(
     JNIEnv *env,
     jobject thiz,
     jstring rootPath,
-    jstring romPath
+    jstring romPath,
+    jstring saveKey
 )
 {
     char root[1024];
     char rom[1024];
+    char key[1024];
     char message[2048];
 
     (void)thiz;
 
     copy_jstring(env, rootPath, root, sizeof(root));
     copy_jstring(env, romPath, rom, sizeof(rom));
-    bridge_log(RETRO_LOG_INFO, "bootRomForPlay root=%s rom=%s", root, rom);
+    copy_jstring(env, saveKey, key, sizeof(key));
+    bridge_log(RETRO_LOG_INFO, "bootRomForPlay root=%s rom=%s saveKey=%s", root, rom, key);
 
-    if (!bridge_load_game_from_path(root, rom)) {
+    if (!bridge_load_game_from_path(root, rom, key)) {
         snprintf(message, sizeof(message),
             "Libretro boot failed\n"
             "rom=%s\n"
@@ -1932,6 +2231,19 @@ Java_com_izzy2lost_nin64_NativeBridge_bootRomForPlay(
     }
 
     return (*env)->NewStringUTF(env, "booted");
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_izzy2lost_nin64_NativeBridge_flushInGameSave(JNIEnv *env, jobject thiz)
+{
+    char message[1024];
+    int ok;
+
+    (void)thiz;
+
+    ok = bridge_save_memory_to_path();
+    snprintf(message, sizeof(message), "%s", ok ? "saved" : (g_bridge.last_error[0] ? g_bridge.last_error : "In-game save failed."));
+    return (*env)->NewStringUTF(env, message);
 }
 
 JNIEXPORT void JNICALL
