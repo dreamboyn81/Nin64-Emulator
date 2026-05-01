@@ -5,18 +5,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CORE_ROOT="${REPO_ROOT}/third_party/mupen64plus-libretro-nx"
-APP_JNI_LIBS_DIR="${REPO_ROOT}/app/src/main/jniLibs/arm64-v8a"
-OUTPUT_LIB="${APP_JNI_LIBS_DIR}/libmupen64plus_next_libretro.so"
 FORCE_REBUILD="${NIN64_FORCE_CORE_REBUILD:-0}"
+ABIS=(arm64-v8a x86_64)
 
 if [[ ! -d "${CORE_ROOT}" ]]; then
     echo "Vendored core not found at ${CORE_ROOT}" >&2
     exit 1
-fi
-
-if [[ -f "${OUTPUT_LIB}" && "${FORCE_REBUILD}" != "1" ]]; then
-    echo "Core already built at ${OUTPUT_LIB}, skipping build."
-    exit 0
 fi
 
 if [[ -n "${ANDROID_NDK_HOME:-}" && -x "${ANDROID_NDK_HOME}/ndk-build" ]]; then
@@ -31,30 +25,45 @@ else
 fi
 
 echo "Using ndk-build at ${NDK_BUILD}"
-echo "Building Mupen64Plus-Next for arm64-v8a with GLES3 enabled..."
+echo "Building Mupen64Plus-Next for ${ABIS[*]} with GLES3 enabled..."
 
-if [[ "${FORCE_REBUILD}" == "1" ]]; then
-    echo "Cleaning existing Mupen64Plus-Next objects for an optimized rebuild..."
+for ABI in "${ABIS[@]}"; do
+    APP_JNI_LIBS_DIR="${REPO_ROOT}/app/src/main/jniLibs/${ABI}"
+    OUTPUT_LIB="${APP_JNI_LIBS_DIR}/libmupen64plus_next_libretro.so"
+    BUILT_LIB="${CORE_ROOT}/libretro/libs/${ABI}/libretro.so"
+
+    if [[ -f "${OUTPUT_LIB}" && "${FORCE_REBUILD}" != "1" ]]; then
+        echo "Core already built at ${OUTPUT_LIB}, skipping ${ABI} build."
+        continue
+    fi
+
+    if [[ "${FORCE_REBUILD}" == "1" ]]; then
+        echo "Cleaning existing Mupen64Plus-Next objects for ${ABI}..."
+        "${NDK_BUILD}" \
+            -C "${CORE_ROOT}/libretro/jni" \
+            APP_ABI="${ABI}" \
+            APP_PLATFORM=android-26 \
+            APP_OPTIM=release \
+            NDK_DEBUG=0 \
+            GLES3=1 \
+            clean
+    fi
+
     "${NDK_BUILD}" \
         -C "${CORE_ROOT}/libretro/jni" \
-        APP_ABI=arm64-v8a \
+        APP_ABI="${ABI}" \
         APP_PLATFORM=android-26 \
         APP_OPTIM=release \
         NDK_DEBUG=0 \
         GLES3=1 \
-        clean
-fi
+        -j"$(nproc)"
 
-"${NDK_BUILD}" \
-    -C "${CORE_ROOT}/libretro/jni" \
-    APP_ABI=arm64-v8a \
-    APP_PLATFORM=android-26 \
-    APP_OPTIM=release \
-    NDK_DEBUG=0 \
-    GLES3=1 \
-    -j"$(nproc)"
+    if [[ ! -f "${BUILT_LIB}" ]]; then
+        echo "Expected built core not found at ${BUILT_LIB}" >&2
+        exit 1
+    fi
 
-mkdir -p "${APP_JNI_LIBS_DIR}"
-cp "${CORE_ROOT}/libretro/libs/arm64-v8a/libretro.so" "${OUTPUT_LIB}"
-
-echo "Copied packaged core to ${OUTPUT_LIB}"
+    mkdir -p "${APP_JNI_LIBS_DIR}"
+    cp "${BUILT_LIB}" "${OUTPUT_LIB}"
+    echo "Copied packaged ${ABI} core to ${OUTPUT_LIB}"
+done

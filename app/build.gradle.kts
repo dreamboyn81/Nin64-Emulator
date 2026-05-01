@@ -18,6 +18,7 @@ android {
 
         ndk {
             abiFilters += "arm64-v8a"
+            abiFilters += "x86_64"
         }
 
         externalNativeBuild {
@@ -75,15 +76,15 @@ kotlin {
     }
 }
 
-tasks.register<Exec>("buildMupen64PlusNextArm64") {
+tasks.register<Exec>("buildMupen64PlusNextAndroid") {
     group = "native"
-    description = "Builds the vendored Mupen64Plus-Next libretro core for arm64-v8a and copies it into app/src/main/jniLibs."
+    description = "Builds the vendored Mupen64Plus-Next libretro core for packaged Android ABIs and copies it into app/src/main/jniLibs."
     workingDir = rootDir
     commandLine("bash", "${rootDir}/scripts/build_mupen64plus_next_android.sh")
 }
 
 tasks.named("preBuild") {
-    dependsOn("buildMupen64PlusNextArm64")
+    dependsOn("buildMupen64PlusNextAndroid")
 }
 
 dependencies {
