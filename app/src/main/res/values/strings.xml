@@ -88,6 +88,10 @@
     <string name="controls_global_reset_done">Controls reset to defaults.</string>
     <string name="controls_per_game_reset_done">Per-game controls reset.</string>
     <string name="hint_long_press_game">Long press a game for per-game settings</string>
+    <string name="ad_attribution">Ad</string>
+    <string name="no_ads">No ads</string>
+    <string name="remove_ads">Remove ads</string>
+    <string name="remove_ads_purchase_unavailable">The no-ads purchase will open here once Google Play Billing is connected.</string>
     <string name="controls_capture_button">Press a button…</string>
     <string name="controls_capture_stick">Move a stick…</string>
     <string name="in_game_menu">Menu</string>

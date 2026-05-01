@@ -95,6 +95,7 @@ dependencies {
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("io.coil-kt:coil:2.6.0")
+    implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.0.1")
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.tukaani:xz:1.10")
     testImplementation("junit:junit:4.13.2")

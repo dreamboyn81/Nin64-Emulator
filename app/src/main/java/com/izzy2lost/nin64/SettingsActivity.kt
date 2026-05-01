@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
@@ -14,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -22,6 +24,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private val prefs by lazy { getSharedPreferences(DisplayOptionsRepository.PREFS_NAME, MODE_PRIVATE) }
+    private val nativeAdPlacement by lazy { NativeAdPlacement(this) }
 
     private lateinit var folderPathText: TextView
 
@@ -49,6 +52,9 @@ class SettingsActivity : AppCompatActivity() {
         folderPathText = findViewById(R.id.folderPathText)
 
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.removeAdsButton).setOnClickListener {
+            showRemoveAdsPurchase()
+        }
 
         findViewById<MaterialButton>(R.id.changeFolderButton).setOnClickListener {
             val current = prefs.getString(PREF_ROM_FOLDER_URI, null)?.let(Uri::parse)
@@ -82,11 +88,17 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         updateFolderDisplay()
+        nativeAdPlacement.loadInto(findViewById<FrameLayout>(R.id.settingsNativeAdContainer))
     }
 
     override fun onResume() {
         super.onResume()
         updateFolderDisplay()
+    }
+
+    override fun onDestroy() {
+        nativeAdPlacement.destroy()
+        super.onDestroy()
     }
 
     private fun updateFolderDisplay() {
@@ -96,6 +108,15 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             getString(R.string.game_folder_not_set)
         }
+    }
+
+    private fun showRemoveAdsPurchase() {
+        MaterialAlertDialogBuilder(this)
+            .setIcon(R.drawable.no_ads_logo)
+            .setTitle(R.string.remove_ads)
+            .setMessage(R.string.remove_ads_purchase_unavailable)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun bindSpinner(

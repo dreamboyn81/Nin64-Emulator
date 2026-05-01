@@ -36,58 +36,77 @@
             android:paddingStart="8dp" />
     </LinearLayout>
 
-    <!-- Controls card: green -->
-    <LinearLayout
-        android:id="@+id/controlsCard"
+    <ScrollView
+        android:id="@+id/controlsScroll"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_margin="16dp"
-        android:background="@drawable/bg_card_green"
-        android:padding="18dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false">
 
-        <TextView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/settings_controls_header"
-            android:textColor="@color/brand_green"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.12" />
+            android:orientation="vertical"
+            android:padding="16dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/editTouchLayoutButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="@string/controls_edit_touch_layout"
-            android:textColor="@color/brand_green"
-            app:strokeColor="@color/brand_green"
-            app:rippleColor="@color/brand_green" />
+            <LinearLayout
+                android:id="@+id/controlsCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card_green"
+                android:orientation="vertical"
+                android:padding="18dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/editControllerMappingButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/controls_edit_controller_mapping"
-            android:textColor="@color/brand_green"
-            app:strokeColor="@color/brand_green"
-            app:rippleColor="@color/brand_green" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.12"
+                    android:text="@string/settings_controls_header"
+                    android:textColor="@color/brand_green"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/resetControlsButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/controls_reset_controls"
-            android:textColor="@color/brand_red"
-            app:strokeColor="@color/brand_red"
-            app:rippleColor="@color/brand_red" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/editTouchLayoutButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/controls_edit_touch_layout"
+                    android:textColor="@color/brand_green"
+                    app:rippleColor="@color/brand_green"
+                    app:strokeColor="@color/brand_green" />
 
-    </LinearLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/editControllerMappingButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/controls_edit_controller_mapping"
+                    android:textColor="@color/brand_green"
+                    app:rippleColor="@color/brand_green"
+                    app:strokeColor="@color/brand_green" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/resetControlsButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/controls_reset_controls"
+                    android:textColor="@color/brand_red"
+                    app:rippleColor="@color/brand_red"
+                    app:strokeColor="@color/brand_red" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/controlsNativeAdContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </ScrollView>
 
 </LinearLayout>

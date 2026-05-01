@@ -42,61 +42,74 @@
         android:layout_weight="1">
 
         <LinearLayout
-            android:id="@+id/displayCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:background="@drawable/bg_card_yellow"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:padding="16dp">
 
-            <TextView
+            <LinearLayout
+                android:id="@+id/displayCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:letterSpacing="0.12"
-                android:text="@string/settings_display_header"
-                android:textColor="@color/brand_yellow"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+                android:background="@drawable/bg_card_yellow"
+                android:orientation="vertical"
+                android:padding="18dp">
 
-            <TextView
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.12"
+                    android:text="@string/settings_display_header"
+                    android:textColor="@color/brand_yellow"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/settings_aspect_label"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="14sp" />
+
+                <Spinner
+                    android:id="@+id/aspectSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/settings_resolution_label"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="14sp" />
+
+                <Spinner
+                    android:id="@+id/resolutionSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/resetDisplayButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/settings_reset_display"
+                    android:textColor="@color/brand_red"
+                    app:rippleColor="@color/brand_red"
+                    app:strokeColor="@color/brand_red" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/displayNativeAdContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="@string/settings_aspect_label"
-                android:textColor="?attr/colorOnSurface"
-                android:textSize="14sp" />
-
-            <Spinner
-                android:id="@+id/aspectSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="@string/settings_resolution_label"
-                android:textColor="?attr/colorOnSurface"
-                android:textSize="14sp" />
-
-            <Spinner
-                android:id="@+id/resolutionSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/resetDisplayButton"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="@string/settings_reset_display"
-                android:textColor="@color/brand_red"
-                app:rippleColor="@color/brand_red"
-                app:strokeColor="@color/brand_red" />
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

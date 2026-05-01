@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
@@ -13,6 +14,7 @@ import com.google.android.material.button.MaterialButton
 class GameControlSettingsActivity : AppCompatActivity() {
     private lateinit var romKey: String
     private var gameTitle: String? = null
+    private val nativeAdPlacement by lazy { NativeAdPlacement(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,11 +27,7 @@ class GameControlSettingsActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_game_control_settings)
         findViewById<View>(R.id.topBar).applyTopBarInsets()
-        findViewById<View>(R.id.controlsCard).applySafeAreaMargins(
-            applyStart = true,
-            applyEnd = true,
-            applyBottom = true,
-        )
+        findViewById<View>(R.id.controlsScroll).applyBottomContentInsets()
 
         val base = getString(R.string.controls_game_controls)
         findViewById<TextView>(R.id.titleText).text =
@@ -47,6 +45,13 @@ class GameControlSettingsActivity : AppCompatActivity() {
             ControlsRepository.resetPerGame(this, romKey)
             Toast.makeText(this, getString(R.string.controls_per_game_reset_done), Toast.LENGTH_SHORT).show()
         }
+
+        nativeAdPlacement.loadInto(findViewById<FrameLayout>(R.id.controlsNativeAdContainer))
+    }
+
+    override fun onDestroy() {
+        nativeAdPlacement.destroy()
+        super.onDestroy()
     }
 
     companion object {
