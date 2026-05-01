@@ -6,13 +6,14 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.graphics.Color
-import android.view.Menu
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.PopupMenu
+import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -25,12 +26,14 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import java.io.File
 import java.io.OutputStream
 import java.util.ArrayDeque
 import java.util.Locale
 import java.util.zip.ZipInputStream
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
@@ -273,7 +276,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bootSelectedRom(entry: RomEntry) {
-        statusText.text = getString(R.string.booting_rom_status, entry.displayName)
+        statusText.text = getString(R.string.booting_rom_status, entry.cleanDisplayName())
 
         Thread {
             try {
@@ -471,71 +474,157 @@ class MainActivity : AppCompatActivity() {
         applyViewMode()
     }
 
-    private fun showGameOptions(anchor: View, entry: RomEntry) {
+    private fun showGameOptions(entry: RomEntry) {
         val hasTexturePack = texturePackFileFor(entry).isFile
         val texturePackEnabled = isTexturePackEnabled(entry)
         val expansionPakDisabled = isExpansionPakDisabled(entry)
-        val popup = PopupMenu(this, anchor)
+        val blue = ContextCompat.getColor(this, R.color.brand_blue)
+        val yellow = ContextCompat.getColor(this, R.color.brand_yellow)
+        val green = ContextCompat.getColor(this, R.color.brand_green)
+        val red = ContextCompat.getColor(this, R.color.brand_red)
 
-        popup.menu.add(Menu.NONE, MENU_PLAY, 0, R.string.game_options_play)
-        popup.menu.add(
-            Menu.NONE,
-            MENU_ADD_TEXTURE_PACK,
-            1,
-            if (hasTexturePack) R.string.game_options_replace_texture_pack else R.string.game_options_add_texture_pack,
+        val actions = mutableListOf(
+            GameOptionAction(
+                title = getString(R.string.game_options_play),
+                summary = getString(R.string.game_options_play_summary),
+                iconRes = R.drawable.ic_play_arrow,
+                containerColor = blue,
+                iconTint = Color.WHITE,
+                onSelected = { bootSelectedRom(entry) },
+            ),
+            GameOptionAction(
+                title = getString(
+                    if (hasTexturePack) {
+                        R.string.game_options_replace_texture_pack
+                    } else {
+                        R.string.game_options_add_texture_pack
+                    }
+                ),
+                summary = getString(
+                    if (hasTexturePack) {
+                        R.string.game_options_texture_pack_replace_summary
+                    } else {
+                        R.string.game_options_texture_pack_add_summary
+                    }
+                ),
+                iconRes = R.drawable.ic_image,
+                containerColor = yellow,
+                iconTint = Color.BLACK,
+                onSelected = { pickTexturePack(entry) },
+            ),
         )
+
         if (hasTexturePack) {
-            popup.menu.add(
-                Menu.NONE,
-                MENU_TOGGLE_TEXTURE_PACK,
-                2,
-                if (texturePackEnabled) R.string.game_options_disable_texture_pack else R.string.game_options_enable_texture_pack,
+            actions += GameOptionAction(
+                title = getString(
+                    if (texturePackEnabled) {
+                        R.string.game_options_disable_texture_pack
+                    } else {
+                        R.string.game_options_enable_texture_pack
+                    }
+                ),
+                summary = getString(
+                    if (texturePackEnabled) {
+                        R.string.game_options_texture_pack_enabled_summary
+                    } else {
+                        R.string.game_options_texture_pack_disabled_summary
+                    }
+                ),
+                iconRes = R.drawable.ic_image,
+                containerColor = if (texturePackEnabled) red else green,
+                iconTint = Color.WHITE,
+                onSelected = { setTexturePackEnabled(entry, !texturePackEnabled) },
             )
-            popup.menu.add(Menu.NONE, MENU_REMOVE_TEXTURE_PACK, 3, R.string.game_options_remove_texture_pack)
+            actions += GameOptionAction(
+                title = getString(R.string.game_options_remove_texture_pack),
+                summary = getString(R.string.game_options_texture_pack_remove_summary),
+                iconRes = R.drawable.ic_delete,
+                containerColor = red,
+                iconTint = Color.WHITE,
+                onSelected = { removeTexturePack(entry) },
+            )
         }
-        popup.menu.add(
-            Menu.NONE,
-            MENU_TOGGLE_EXPANSION_PAK,
-            4,
-            if (expansionPakDisabled) R.string.game_options_enable_expansion_pak else R.string.game_options_disable_expansion_pak,
+        actions += GameOptionAction(
+            title = getString(
+                if (expansionPakDisabled) {
+                    R.string.game_options_enable_expansion_pak
+                } else {
+                    R.string.game_options_disable_expansion_pak
+                }
+            ),
+            summary = getString(
+                if (expansionPakDisabled) {
+                    R.string.game_options_expansion_pak_disabled_summary
+                } else {
+                    R.string.game_options_expansion_pak_enabled_summary
+                }
+            ),
+            iconRes = R.drawable.ic_memory,
+            containerColor = if (expansionPakDisabled) green else red,
+            iconTint = Color.WHITE,
+            onSelected = { setExpansionPakDisabled(entry, !expansionPakDisabled) },
         )
-        popup.menu.add(Menu.NONE, MENU_CHEAT_MANAGER, 5, R.string.cheats_manager)
-        popup.menu.add(Menu.NONE, MENU_CONFIGURE_CONTROLS, 6, R.string.game_options_configure_controls)
+        actions += GameOptionAction(
+            title = getString(R.string.cheats_manager),
+            summary = getString(R.string.game_options_cheats_summary),
+            iconRes = R.drawable.ic_cheats,
+            containerColor = blue,
+            iconTint = Color.WHITE,
+            onSelected = { CheatManagerActivity.launch(this, entry.preferenceKey(), entry.crc, entry.cleanDisplayName()) },
+        )
+        actions += GameOptionAction(
+            title = getString(R.string.game_options_configure_display),
+            summary = getString(R.string.game_options_display_summary),
+            iconRes = R.drawable.ic_display,
+            containerColor = yellow,
+            iconTint = Color.BLACK,
+            onSelected = { GameDisplaySettingsActivity.launch(this, entry.preferenceKey(), entry.cleanDisplayName()) },
+        )
+        actions += GameOptionAction(
+            title = getString(R.string.game_options_configure_controls),
+            summary = getString(R.string.game_options_controls_summary),
+            iconRes = R.drawable.ic_videogame,
+            containerColor = green,
+            iconTint = Color.WHITE,
+            onSelected = { GameControlSettingsActivity.launch(this, entry.preferenceKey(), entry.cleanDisplayName()) },
+        )
 
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_PLAY -> {
-                    bootSelectedRom(entry)
-                    true
-                }
-                MENU_ADD_TEXTURE_PACK -> {
-                    pickTexturePack(entry)
-                    true
-                }
-                MENU_TOGGLE_TEXTURE_PACK -> {
-                    setTexturePackEnabled(entry, !texturePackEnabled)
-                    true
-                }
-                MENU_REMOVE_TEXTURE_PACK -> {
-                    removeTexturePack(entry)
-                    true
-                }
-                MENU_TOGGLE_EXPANSION_PAK -> {
-                    setExpansionPakDisabled(entry, !expansionPakDisabled)
-                    true
-                }
-                MENU_CHEAT_MANAGER -> {
-                    CheatManagerActivity.launch(this, entry.preferenceKey(), entry.crc, entry.displayName)
-                    true
-                }
-                MENU_CONFIGURE_CONTROLS -> {
-                    GameControlSettingsActivity.launch(this, entry.preferenceKey(), entry.displayName)
-                    true
-                }
-                else -> false
+        showGameOptionsDialog(entry, actions)
+    }
+
+    private fun showGameOptionsDialog(entry: RomEntry, actions: List<GameOptionAction>) {
+        val content = layoutInflater.inflate(R.layout.dialog_game_options, null)
+        content.findViewById<TextView>(R.id.gameOptionsTitle).text = entry.cleanDisplayName()
+        val list = content.findViewById<LinearLayout>(R.id.gameOptionsList)
+        var dialog: androidx.appcompat.app.AlertDialog? = null
+
+        actions.forEach { action ->
+            val row = layoutInflater.inflate(R.layout.item_game_option_action, list, false)
+            row.findViewById<TextView>(R.id.gameOptionTitle).text = action.title
+            row.findViewById<TextView>(R.id.gameOptionSummary).text = action.summary
+            row.findViewById<ImageView>(R.id.gameOptionIcon).apply {
+                setImageResource(action.iconRes)
+                setColorFilter(action.iconTint)
             }
+            row.findViewById<View>(R.id.gameOptionIconChip).background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 16.dp.toFloat()
+                setColor(action.containerColor)
+            }
+            row.setOnClickListener {
+                dialog?.dismiss()
+                action.onSelected()
+            }
+            list.addView(row)
         }
-        popup.show()
+
+        dialog = MaterialAlertDialogBuilder(this)
+            .setView(content)
+            .create()
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        }
+        dialog.show()
     }
 
     private fun pickTexturePack(entry: RomEntry) {
@@ -556,7 +645,7 @@ class MainActivity : AppCompatActivity() {
                 result.onSuccess { importResult ->
                     Toast.makeText(
                         this,
-                        getString(R.string.texture_pack_imported, importResult.sourceName, entry.displayName),
+                        getString(R.string.texture_pack_imported, importResult.sourceName, entry.cleanDisplayName()),
                         Toast.LENGTH_LONG,
                     ).show()
                 }.onFailure { error ->
@@ -702,7 +791,7 @@ class MainActivity : AppCompatActivity() {
                 .putBoolean(texturePackEnabledPrefKey(entry), false)
                 .remove(texturePackSourcePrefKey(entry))
                 .apply()
-            Toast.makeText(this, getString(R.string.texture_pack_removed, entry.displayName), Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.texture_pack_removed, entry.cleanDisplayName()), Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, getString(R.string.texture_pack_remove_failed), Toast.LENGTH_LONG).show()
         }
@@ -711,9 +800,9 @@ class MainActivity : AppCompatActivity() {
     private fun setTexturePackEnabled(entry: RomEntry, enabled: Boolean) {
         prefs.edit().putBoolean(texturePackEnabledPrefKey(entry), enabled).apply()
         val message = if (enabled) {
-            getString(R.string.texture_pack_enabled, entry.displayName)
+            getString(R.string.texture_pack_enabled, entry.cleanDisplayName())
         } else {
-            getString(R.string.texture_pack_disabled, entry.displayName)
+            getString(R.string.texture_pack_disabled, entry.cleanDisplayName())
         }
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
@@ -721,9 +810,9 @@ class MainActivity : AppCompatActivity() {
     private fun setExpansionPakDisabled(entry: RomEntry, disabled: Boolean) {
         prefs.edit().putBoolean(expansionPakDisabledPrefKey(entry), disabled).apply()
         val message = if (disabled) {
-            getString(R.string.expansion_pak_disabled, entry.displayName)
+            getString(R.string.expansion_pak_disabled, entry.cleanDisplayName())
         } else {
-            getString(R.string.expansion_pak_enabled, entry.displayName)
+            getString(R.string.expansion_pak_enabled, entry.cleanDisplayName())
         }
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
@@ -779,6 +868,8 @@ class MainActivity : AppCompatActivity() {
     private fun archiveFileName(path: String): String =
         path.replace('\\', '/').substringAfterLast('/')
 
+    private val Int.dp: Int get() = (this * resources.displayMetrics.density).roundToInt()
+
     private inner class ListAdapter : RecyclerView.Adapter<ListAdapter.ViewHolder>() {
         private val strokeColors = intArrayOf(
             Color.parseColor("#0056EA"),
@@ -813,7 +904,7 @@ class MainActivity : AppCompatActivity() {
                 val pos = holder.bindingAdapterPosition
                 val entry = if (pos != RecyclerView.NO_POSITION) romEntries.getOrNull(pos) else null
                 if (entry != null) {
-                    showGameOptions(holder.itemView, entry)
+                    showGameOptions(entry)
                     true
                 } else {
                     false
@@ -849,7 +940,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             val entry = romEntries[position]
-            holder.fallback.text = entry.displayName
+            holder.fallback.text = entry.cleanDisplayName()
 
             val stem = entry.fileName.substringBeforeLast('.', entry.fileName)
             val coverFile = CoverMatcher.resolve(entry.coverCandidates()) ?: "$stem.png"
@@ -876,7 +967,7 @@ class MainActivity : AppCompatActivity() {
                 val pos = holder.bindingAdapterPosition
                 val entry = if (pos != RecyclerView.NO_POSITION) romEntries.getOrNull(pos) else null
                 if (entry != null) {
-                    showGameOptions(holder.itemView, entry)
+                    showGameOptions(entry)
                     true
                 } else {
                     false
@@ -890,6 +981,15 @@ class MainActivity : AppCompatActivity() {
     private data class PerGameOptions(
         val useTexturePack: Boolean,
         val disableExpansionPak: Boolean,
+    )
+
+    private data class GameOptionAction(
+        val title: String,
+        val summary: String,
+        val iconRes: Int,
+        val containerColor: Int,
+        val iconTint: Int,
+        val onSelected: () -> Unit,
     )
 
     private data class TexturePackImportResult(
@@ -908,17 +1008,14 @@ class MainActivity : AppCompatActivity() {
         val documentUri: Uri? = null,
     ) {
         fun coverCandidates(): List<String> =
-            listOfNotNull(databaseName, displayName, fileName, fallbackName).distinct()
+            listOfNotNull(databaseName, displayName, cleanDisplayName(), fileName, fallbackName).distinct()
 
         fun preferenceKey(): String = md5 ?: crc ?: fileName
 
-        fun listLabel(): String {
-            return if (displayName.equals(fallbackName, ignoreCase = true)) {
-                displayName
-            } else {
-                "$displayName ($fileName)"
-            }
-        }
+        fun cleanDisplayName(): String =
+            cleanRomTitle(displayName).ifBlank { displayName }
+
+        fun listLabel(): String = cleanDisplayName()
     }
 
     companion object {
@@ -930,17 +1027,20 @@ class MainActivity : AppCompatActivity() {
         private const val VIEW_MODE_LIST = "list"
         private const val VIEW_MODE_GRID = "grid"
 
-        private const val MENU_PLAY = 1
-        private const val MENU_ADD_TEXTURE_PACK = 2
-        private const val MENU_TOGGLE_TEXTURE_PACK = 3
-        private const val MENU_REMOVE_TEXTURE_PACK = 4
-        private const val MENU_TOGGLE_EXPANSION_PAK = 5
-        private const val MENU_CONFIGURE_CONTROLS = 6
-        private const val MENU_CHEAT_MANAGER = 7
-
         private const val COVER_BASE_URL =
             "https://raw.githubusercontent.com/izzy2lost/n64_covers/main"
 
         private val ROM_EXTENSIONS = setOf("z64", "n64", "v64", "rom", "bin")
+
+        private fun cleanRomTitle(title: String): String {
+            val firstParen = title.indexOf('(').takeIf { it >= 0 } ?: title.length
+            val firstBracket = title.indexOf('[').takeIf { it >= 0 } ?: title.length
+            val markerIndex = minOf(firstParen, firstBracket)
+            return title
+                .take(markerIndex)
+                .trim()
+                .trimEnd('-', '.', '_')
+                .trim()
+        }
     }
 }

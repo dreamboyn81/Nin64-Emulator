@@ -18,15 +18,10 @@ import com.google.android.material.button.MaterialButton
 class SettingsActivity : AppCompatActivity() {
 
     private companion object {
-        const val PREFS_NAME = "nin64_prefs"
         const val PREF_ROM_FOLDER_URI = "rom_folder_uri"
-        const val PREF_ASPECT = "mupen64plus-aspect"
-        const val PREF_RES_FACTOR = "mupen64plus-EnableNativeResFactor"
-        const val DEFAULT_ASPECT = "4:3"
-        const val DEFAULT_RES_FACTOR = "0"
     }
 
-    private val prefs by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
+    private val prefs by lazy { getSharedPreferences(DisplayOptionsRepository.PREFS_NAME, MODE_PRIVATE) }
 
     private lateinit var folderPathText: TextView
 
@@ -64,15 +59,15 @@ class SettingsActivity : AppCompatActivity() {
             spinnerId = R.id.aspectSpinner,
             labelsRes = R.array.aspect_labels,
             valuesRes = R.array.aspect_values,
-            prefKey = PREF_ASPECT,
-            defaultValue = DEFAULT_ASPECT
+            prefKey = DisplayOptionsRepository.PREF_ASPECT,
+            defaultValue = DisplayOptionsRepository.DEFAULT_ASPECT
         )
         bindSpinner(
             spinnerId = R.id.resolutionSpinner,
             labelsRes = R.array.resolution_labels,
             valuesRes = R.array.resolution_values,
-            prefKey = PREF_RES_FACTOR,
-            defaultValue = DEFAULT_RES_FACTOR
+            prefKey = DisplayOptionsRepository.PREF_RES_FACTOR,
+            defaultValue = DisplayOptionsRepository.DEFAULT_RES_FACTOR
         )
 
         findViewById<MaterialButton>(R.id.editTouchLayoutButton).setOnClickListener {

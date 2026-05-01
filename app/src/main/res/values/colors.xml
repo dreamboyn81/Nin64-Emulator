@@ -11,6 +11,10 @@
     <color name="surface">#F2F2F7</color>
     <color name="on_surface">#212121</color>
     <color name="on_surface_muted">#757575</color>
+    <color name="game_options_dialog_surface">#FFFFFF</color>
+    <color name="game_options_dialog_stroke">#E2E4EC</color>
+    <color name="game_options_row_surface">#F7F8FC</color>
+    <color name="game_options_row_stroke">#E0E3EB</color>
 
     <!-- Theme-sensitive colors -->
     <color name="rom_text_color">#000000</color>

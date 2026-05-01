@@ -192,21 +192,18 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback {
     }
 
     private fun applyEmulatorSettings(surfaceWidth: Int, surfaceHeight: Int) {
-        val prefs = getSharedPreferences("nin64_prefs", MODE_PRIVATE)
-        val aspect = prefs.getString("mupen64plus-aspect", "4:3") ?: "4:3"
-        NativeBridge.setOption("mupen64plus-aspect", aspect)
+        val displayOptions = DisplayOptionsRepository.load(this, romPreferenceKey)
+        NativeBridge.setOption(DisplayOptionsRepository.PREF_ASPECT, displayOptions.aspect)
 
-        val resPref = prefs.getString("mupen64plus-EnableNativeResFactor", null)
-        val factor = if (resPref.isNullOrEmpty() || resPref == "0") {
-            ((surfaceHeight + 120) / 240).coerceIn(1, 8)
-        } else {
-            resPref.toIntOrNull()?.coerceIn(1, 8) ?: 1
-        }
-        NativeBridge.setOption("mupen64plus-EnableNativeResFactor", factor.toString())
+        val factor = DisplayOptionsRepository.nativeResolutionFactorForPreference(
+            displayOptions.resolutionFactor,
+            surfaceHeight,
+        )
+        NativeBridge.setOption(DisplayOptionsRepository.PREF_RES_FACTOR, factor.toString())
         applyPerGameEmulatorSettings()
         Log.i(
             logTag,
-            "applyEmulatorSettings surface=${surfaceWidth}x$surfaceHeight aspect=$aspect resFactor=$factor"
+            "applyEmulatorSettings surface=${surfaceWidth}x$surfaceHeight aspect=${displayOptions.aspect} resFactor=$factor"
         )
     }
 

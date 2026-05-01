@@ -5,6 +5,10 @@
     <color name="surface">#1E1F28</color>
     <color name="on_surface">#FFFFFF</color>
     <color name="on_surface_muted">#AAAAAA</color>
+    <color name="game_options_dialog_surface">#252632</color>
+    <color name="game_options_dialog_stroke">#383948</color>
+    <color name="game_options_row_surface">#1B1C25</color>
+    <color name="game_options_row_stroke">#343544</color>
 
     <!-- Theme-sensitive colors -->
     <color name="rom_text_color">#FFFFFF</color>

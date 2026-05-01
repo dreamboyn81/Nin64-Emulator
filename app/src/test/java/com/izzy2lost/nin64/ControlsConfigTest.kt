@@ -105,6 +105,51 @@ class ControlsConfigTest {
     }
 
     @Test
+    fun displayOptionsPreferPerGameOverrides() {
+        val resolved = DisplayOptionsRepository.resolve(
+            globalAspect = "4:3",
+            globalResolutionFactor = "2",
+            perGameAspect = "16:9",
+            perGameResolutionFactor = "4",
+        )
+
+        assertEquals("16:9", resolved.aspect)
+        assertEquals("4", resolved.resolutionFactor)
+    }
+
+    @Test
+    fun displayOptionsFallBackToGlobalValues() {
+        val resolved = DisplayOptionsRepository.resolve(
+            globalAspect = "16:9 adjusted",
+            globalResolutionFactor = "3",
+            perGameAspect = null,
+            perGameResolutionFactor = null,
+        )
+
+        assertEquals("16:9 adjusted", resolved.aspect)
+        assertEquals("3", resolved.resolutionFactor)
+    }
+
+    @Test
+    fun perGameDisplayKeysMatchStorageShape() {
+        assertEquals(
+            "per_game.mario.mupen64plus-aspect",
+            DisplayOptionsRepository.perGameAspectKey("mario"),
+        )
+        assertEquals(
+            "per_game.mario.mupen64plus-EnableNativeResFactor",
+            DisplayOptionsRepository.perGameResolutionFactorKey("mario"),
+        )
+    }
+
+    @Test
+    fun autoResolutionFactorUsesSurfaceHeight() {
+        assertEquals(3, DisplayOptionsRepository.nativeResolutionFactorForPreference("0", 600))
+        assertEquals(8, DisplayOptionsRepository.nativeResolutionFactorForPreference("0", 2400))
+        assertEquals(4, DisplayOptionsRepository.nativeResolutionFactorForPreference("4", 600))
+    }
+
+    @Test
     fun cheatCrcNormalizationMatchesMupenDatabaseShape() {
         assertEquals("80F41131-384645F6", CheatDatabase.normalizeCrc("80F41131 384645F6"))
         assertEquals("80F41131-384645F6", CheatDatabase.normalizeCrc("80F41131-384645F6-C:4A"))
