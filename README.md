@@ -61,9 +61,9 @@ See [docs/native-core-backends.md](docs/native-core-backends.md) for details.
 
 ## License
 
-Nin64 inherits the license of the emulation core it wraps:
+Nin64 is licensed under the [GNU General Public License v2.0](LICENSE), matching the emulation core it wraps:
 
-- **GNU General Public License v2.0** (Mupen64Plus / Mupen64Plus-Next)
+- **GNU General Public License v2.0** ([gnu.org](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)) (Mupen64Plus / Mupen64Plus-Next)
 - Some components under compatible open-source licenses
 
 No Nintendo ROM files or BIOS content are included. Nin64 is not affiliated with Nintendo.

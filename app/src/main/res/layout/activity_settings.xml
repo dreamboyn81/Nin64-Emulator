@@ -45,6 +45,16 @@
             android:padding="7dp"
             android:scaleType="fitCenter"
             android:src="@drawable/no_ads_logo" />
+
+        <ImageButton
+            android:id="@+id/aboutButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center_vertical|end"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/about_nin64"
+            android:padding="12dp"
+            android:src="@drawable/ic_info" />
     </FrameLayout>
 
     <ScrollView

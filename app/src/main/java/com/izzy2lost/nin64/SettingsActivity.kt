@@ -1,5 +1,6 @@
 package com.izzy2lost.nin64
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -54,6 +55,9 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
         findViewById<ImageButton>(R.id.removeAdsButton).setOnClickListener {
             showRemoveAdsPurchase()
+        }
+        findViewById<ImageButton>(R.id.aboutButton).setOnClickListener {
+            showAboutDialog()
         }
 
         findViewById<MaterialButton>(R.id.changeFolderButton).setOnClickListener {
@@ -117,6 +121,29 @@ class SettingsActivity : AppCompatActivity() {
             .setMessage(R.string.remove_ads_purchase_unavailable)
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+
+    private fun showAboutDialog() {
+        val labels = resources.getStringArray(R.array.about_link_labels)
+        val urls = resources.getStringArray(R.array.about_link_urls)
+
+        MaterialAlertDialogBuilder(this)
+            .setIcon(R.drawable.ic_info)
+            .setTitle(R.string.about_nin64)
+            .setMessage(R.string.about_links_prompt)
+            .setItems(labels) { _, which ->
+                urls.getOrNull(which)?.let(::openAboutLink)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun openAboutLink(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.about_link_unavailable, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun bindSpinner(
