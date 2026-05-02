@@ -680,7 +680,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun importTexturePack(entry: RomEntry, uri: Uri) {
         val sourceName = displayNameForUri(uri)
-        Toast.makeText(this, getString(R.string.texture_pack_importing, sourceName), Toast.LENGTH_SHORT).show()
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_texture_pack_progress, null)
+        dialogView.findViewById<TextView>(R.id.progress_message).text =
+            getString(R.string.texture_pack_importing, sourceName)
+        val progressDialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.texture_pack_importing_title)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
 
         Thread {
             val result = runCatching {
@@ -688,6 +697,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             runOnUiThread {
+                progressDialog.dismiss()
                 result.onSuccess { importResult ->
                     Toast.makeText(
                         this,

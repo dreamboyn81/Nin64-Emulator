@@ -40,6 +40,7 @@
     <string name="game_options_cheats_summary">Manage cheat codes</string>
     <string name="game_options_display_summary">Aspect ratio and render resolution</string>
     <string name="game_options_controls_summary">Touch layout and controller mapping</string>
+    <string name="texture_pack_importing_title">Importing Texture Pack</string>
     <string name="texture_pack_importing">Importing %1$s...</string>
     <string name="texture_pack_imported">Imported %1$s for %2$s.</string>
     <string name="texture_pack_import_failed">Texture pack import failed: %1$s</string>
