@@ -143,9 +143,9 @@ class ControlsConfigTest {
     }
 
     @Test
-    fun autoResolutionFactorUsesSurfaceHeight() {
-        assertEquals(3, DisplayOptionsRepository.nativeResolutionFactorForPreference("0", 600))
-        assertEquals(8, DisplayOptionsRepository.nativeResolutionFactorForPreference("0", 2400))
+    fun resolutionFactorDefaultsTo2xWithoutAutoScaling() {
+        assertEquals(2, DisplayOptionsRepository.nativeResolutionFactorForPreference("", 600))
+        assertEquals(2, DisplayOptionsRepository.nativeResolutionFactorForPreference("0", 2400))
         assertEquals(4, DisplayOptionsRepository.nativeResolutionFactorForPreference("4", 600))
     }
 

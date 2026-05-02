@@ -12,7 +12,7 @@ object DisplayOptionsRepository {
     const val PREF_ASPECT = "mupen64plus-aspect"
     const val PREF_RES_FACTOR = "mupen64plus-EnableNativeResFactor"
     const val DEFAULT_ASPECT = "4:3"
-    const val DEFAULT_RES_FACTOR = "0"
+    const val DEFAULT_RES_FACTOR = "2"
 
     fun load(context: Context, romKey: String?): DisplayOptions {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -36,11 +36,12 @@ object DisplayOptionsRepository {
         )
 
     fun nativeResolutionFactorForPreference(preference: String, surfaceHeight: Int): Int {
-        return if (preference.isEmpty() || preference == DEFAULT_RES_FACTOR) {
-            ((surfaceHeight + 120) / 240).coerceIn(1, 8)
-        } else {
-            preference.toIntOrNull()?.coerceIn(1, 8) ?: 1
-        }
+        val defaultFactor = DEFAULT_RES_FACTOR.toInt()
+        return preference
+            .takeUnless { it.isEmpty() || it == "0" }
+            ?.toIntOrNull()
+            ?.coerceIn(1, 9)
+            ?: defaultFactor
     }
 
     fun resetPerGame(context: Context, romKey: String) {

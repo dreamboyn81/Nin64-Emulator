@@ -78,15 +78,32 @@ ifneq ($(GIT_VERSION)," unknown")
   COREFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 endif
 
+NIN64_ENABLE_THINLTO ?= 1
+NIN64_ABI_ENABLE_THINLTO := $(NIN64_ENABLE_THINLTO)
+NIN64_C_RELEASE_FLAGS := -O3 -DNDEBUG -fsigned-char -ffast-math -funsafe-math-optimizations -fno-finite-math-only -fno-strict-aliasing -fomit-frame-pointer -fvisibility=hidden
+NIN64_CPP_RELEASE_FLAGS := -fvisibility-inlines-hidden
+NIN64_LD_RELEASE_FLAGS := -O3 -Wl,--gc-sections
+
+ifeq ($(TARGET_ARCH_ABI),x86)
+  NIN64_ABI_ENABLE_THINLTO := 0
+else ifeq ($(TARGET_ARCH_ABI),x86_64)
+  NIN64_ABI_ENABLE_THINLTO := 0
+endif
+
+ifeq ($(NIN64_ABI_ENABLE_THINLTO),1)
+  NIN64_C_RELEASE_FLAGS += -flto=thin
+  NIN64_LD_RELEASE_FLAGS += -flto=thin
+endif
+
 include $(CLEAR_VARS)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE           := retro
 LOCAL_SRC_FILES        := $(SOURCES_CXX) $(SOURCES_C) $(SOURCES_ASM) $(SOURCES_NASM)
 LOCAL_ASMFLAGS         := $(COREASMFLAGS)
-LOCAL_CPPFLAGS         := -std=gnu++11 $(CXXFLAGS) $(COREFLAGS)
-LOCAL_CFLAGS           := $(CFLAGS) $(COREFLAGS)
-LOCAL_LDFLAGS          := -Wl,-version-script=$(LIBRETRO_DIR)/link.T
+LOCAL_CPPFLAGS         := -std=gnu++11 $(NIN64_CPP_RELEASE_FLAGS) $(CXXFLAGS) $(COREFLAGS)
+LOCAL_CFLAGS           := $(NIN64_C_RELEASE_FLAGS) $(CFLAGS) $(COREFLAGS)
+LOCAL_LDFLAGS          := -Wl,-version-script=$(LIBRETRO_DIR)/link.T $(NIN64_LD_RELEASE_FLAGS)
 LOCAL_LDLIBS           := -llog -lEGL $(GLLIB) $(CORELDLIBS)
 LOCAL_STATIC_LIBRARIES := 
 LOCAL_CPP_FEATURES     := exceptions

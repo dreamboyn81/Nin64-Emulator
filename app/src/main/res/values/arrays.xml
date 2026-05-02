@@ -16,19 +16,18 @@
 
     <!-- mupen64plus-EnableNativeResFactor: shown labels -->
     <string-array name="resolution_labels">
-        <item>Auto (match screen)</item>
-        <item>Native (1x)</item>
-        <item>2x</item>
-        <item>3x</item>
-        <item>4x</item>
-        <item>5x</item>
-        <item>6x</item>
-        <item>7x</item>
-        <item>8x</item>
+        <item>Native (1x) — 320×240</item>
+        <item>2x — 640×480</item>
+        <item>3x — 960×720 (~720p)</item>
+        <item>4x — 1280×960</item>
+        <item>5x — 1600×1200</item>
+        <item>6x — 1920×1440 (~1080p)</item>
+        <item>7x — 2240×1680</item>
+        <item>8x — 2560×1920 (~1440p)</item>
+        <item>9x — 2880×2160 (~4K)</item>
     </string-array>
     <!-- mupen64plus-EnableNativeResFactor: values passed to the core -->
     <string-array name="resolution_values">
-        <item>0</item>
         <item>1</item>
         <item>2</item>
         <item>3</item>
@@ -37,6 +36,7 @@
         <item>6</item>
         <item>7</item>
         <item>8</item>
+        <item>9</item>
     </string-array>
 
     <string-array name="about_link_labels">
