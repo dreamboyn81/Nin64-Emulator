@@ -8,9 +8,9 @@ import com.google.android.libraries.ads.mobile.sdk.MobileAds
 import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
 
 object AdsController {
-    const val ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713"
-    const val NATIVE_AD_UNIT_ID = "ca-app-pub-3940256099942544/2247696110"
-    const val APP_OPEN_AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
+    const val ADMOB_APP_ID = "ca-app-pub-9721315985864233~1151488653"
+    const val NATIVE_AD_UNIT_ID = "ca-app-pub-9721315985864233/6818748306"
+    const val APP_OPEN_AD_UNIT_ID = "ca-app-pub-9721315985864233/8058754347"
 
     private const val TAG = "Nin64Ads"
     private const val PREFS_NAME = "nin64_ads"
