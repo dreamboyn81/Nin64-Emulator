@@ -8,7 +8,7 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /**
- * Caches the cover-art index from the GitHub repo (one .png filename per line) and
+ * Caches the cover-art index from the GitHub repo (one .webp filename per line) and
  * fuzzy-matches a ROM filename to a cover. The index is downloaded once per day,
  * while resolved images are stored in app storage for offline reuse.
  *
@@ -20,10 +20,11 @@ import java.util.concurrent.Executors
 internal object CoverMatcher {
 
     private const val PREFS = "cover_index"
-    private const val KEY_DATA = "data"
-    private const val KEY_TS = "ts"
+    private const val KEY_DATA = "data_webp"
+    private const val KEY_TS = "ts_webp"
     private const val TTL_MS = 24L * 3600_000
     private const val COVER_CACHE_DIR = "cover_art"
+    private const val COVER_EXTENSION = "webp"
     private const val KEY_NOT_FOUND_PREFIX = "not_found_"
     private const val NOT_FOUND_RETRY_MS = 7L * 24 * 3600_000
 
@@ -252,7 +253,7 @@ internal object CoverMatcher {
 
     private fun buildIndex(text: String): Map<String, String> =
         text.lines()
-            .filter { it.endsWith(".png") }
+            .filter { it.endsWith(".$COVER_EXTENSION") }
             .associateBy { normalize(stripKnownExtension(it)) }
 
     private fun stripKnownExtension(name: String): String {
@@ -320,8 +321,8 @@ internal object CoverMatcher {
 
     private fun safeCacheName(coverFileName: String): String {
         val safeName = coverFileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        return safeName.ifBlank { "cover.png" }
+        return safeName.ifBlank { "cover.$COVER_EXTENSION" }
     }
 
-    private val KNOWN_EXTENSIONS = setOf("z64", "n64", "v64", "rom", "bin", "png")
+    private val KNOWN_EXTENSIONS = setOf("z64", "n64", "v64", "rom", "bin", "png", "webp")
 }

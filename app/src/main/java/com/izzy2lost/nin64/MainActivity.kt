@@ -1056,7 +1056,7 @@ class MainActivity : AppCompatActivity() {
         if (!CoverMatcher.isReady()) return null
 
         val stem = entry.fileName.substringBeforeLast('.', entry.fileName).trim()
-        return stem.takeIf { it.isNotEmpty() }?.let { "$it.png" }
+        return stem.takeIf { it.isNotEmpty() }?.let { "$it.webp" }
     }
 
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).roundToInt()
