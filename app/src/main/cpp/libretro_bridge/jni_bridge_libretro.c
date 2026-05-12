@@ -2179,7 +2179,7 @@ static void bridge_run_frame(void)
 
     g_bridge.next_frame_deadline_ns += g_bridge.frame_interval_ns;
     if (g_bridge.next_frame_deadline_ns + g_bridge.frame_interval_ns < now_ns) {
-        g_bridge.next_frame_deadline_ns = now_ns + g_bridge.frame_interval_ns;
+        g_bridge.next_frame_deadline_ns = now_ns;
     }
 }
 
