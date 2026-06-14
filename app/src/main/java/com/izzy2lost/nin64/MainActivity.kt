@@ -13,7 +13,6 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -57,7 +56,6 @@ class MainActivity : AppCompatActivity() {
     private var pendingTexturePackEntry: RomEntry? = null
     @Volatile private var coverWarmupGeneration = 0
     private var coverRefreshQueued = false
-    private val nativeAdPlacement by lazy { NativeAdPlacement(this) }
 
     private val prefs by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -143,7 +141,6 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        setupAds()
         updateEmptyState()
 
         if (intent.getStringExtra(EXTRA_BOOT_ROM_PATH) != null) {
@@ -155,39 +152,6 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateEmptyState()
         loadAvailableRoms()
-    }
-
-    override fun onDestroy() {
-        nativeAdPlacement.destroy()
-        super.onDestroy()
-    }
-
-    private fun setupAds() {
-        if (!AdsController.areAdsEnabled(this)) {
-            return
-        }
-
-        nativeAdPlacement.load {
-            romRecyclerView.adapter?.notifyDataSetChanged()
-        }
-    }
-
-    private fun bindNativeAdFooter(container: FrameLayout) {
-        nativeAdPlacement.bind(container)
-    }
-
-    private fun hasNativeAdFooter(): Boolean {
-        return nativeAdPlacement.hasAd()
-    }
-
-    private fun createNativeAdFooterContainer(parent: ViewGroup): FrameLayout {
-        return FrameLayout(parent.context).apply {
-            layoutParams = RecyclerView.LayoutParams(
-                RecyclerView.LayoutParams.MATCH_PARENT,
-                RecyclerView.LayoutParams.WRAP_CONTENT,
-            )
-            setPadding(12.dp, 8.dp, 12.dp, 8.dp)
-        }
     }
 
     private fun preferredRootDir(): File {
@@ -524,17 +488,7 @@ class MainActivity : AppCompatActivity() {
     private fun applyViewMode() {
         when (viewMode) {
             VIEW_MODE_GRID -> {
-                romRecyclerView.layoutManager = GridLayoutManager(this, gridSpanCount()).apply {
-                    spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                        override fun getSpanSize(position: Int): Int {
-                            return if (gridAdapter.getItemViewType(position) == VIEW_TYPE_NATIVE_AD) {
-                                spanCount
-                            } else {
-                                1
-                            }
-                        }
-                    }
-                }
+                romRecyclerView.layoutManager = GridLayoutManager(this, gridSpanCount())
                 romRecyclerView.adapter = gridAdapter
                 viewToggleButton.setImageResource(R.drawable.ic_view_list)
                 viewToggleButton.contentDescription = getString(R.string.switch_to_list)
@@ -1075,29 +1029,13 @@ class MainActivity : AppCompatActivity() {
             val text: TextView = itemView.findViewById(R.id.romTitle)
         }
 
-        inner class NativeAdFooterViewHolder(val container: FrameLayout) :
-            RecyclerView.ViewHolder(container)
-
-        override fun getItemViewType(position: Int): Int {
-            return if (position < romEntries.size) VIEW_TYPE_ROM else VIEW_TYPE_NATIVE_AD
-        }
-
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            return if (viewType == VIEW_TYPE_NATIVE_AD) {
-                NativeAdFooterViewHolder(createNativeAdFooterContainer(parent))
-            } else {
-                val view = LayoutInflater.from(parent.context)
-                    .inflate(R.layout.list_item_rom, parent, false)
-                RomViewHolder(view)
-            }
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.list_item_rom, parent, false)
+            return RomViewHolder(view)
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            if (holder is NativeAdFooterViewHolder) {
-                bindNativeAdFooter(holder.container)
-                return
-            }
-
             holder as RomViewHolder
             val entry = romEntries[position]
             holder.text.text = entry.listLabel()
@@ -1120,14 +1058,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
-            if (holder is NativeAdFooterViewHolder) {
-                holder.container.removeAllViews()
-            }
-            super.onViewRecycled(holder)
-        }
-
-        override fun getItemCount() = romEntries.size + if (hasNativeAdFooter()) 1 else 0
+        override fun getItemCount() = romEntries.size
     }
 
     private inner class GridAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -1137,29 +1068,13 @@ class MainActivity : AppCompatActivity() {
             val fallback: TextView = itemView.findViewById(R.id.fallbackTitle)
         }
 
-        inner class NativeAdFooterViewHolder(val container: FrameLayout) :
-            RecyclerView.ViewHolder(container)
-
-        override fun getItemViewType(position: Int): Int {
-            return if (position < romEntries.size) VIEW_TYPE_ROM else VIEW_TYPE_NATIVE_AD
-        }
-
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            return if (viewType == VIEW_TYPE_NATIVE_AD) {
-                NativeAdFooterViewHolder(createNativeAdFooterContainer(parent))
-            } else {
-                val view = LayoutInflater.from(parent.context)
-                    .inflate(R.layout.item_rom_grid, parent, false)
-                RomViewHolder(view)
-            }
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_rom_grid, parent, false)
+            return RomViewHolder(view)
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            if (holder is NativeAdFooterViewHolder) {
-                bindNativeAdFooter(holder.container)
-                return
-            }
-
             holder as RomViewHolder
             // Recompute height on every bind so recycled holders get the right size after rotation.
             val rv = romRecyclerView
@@ -1217,15 +1132,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
-            if (holder is NativeAdFooterViewHolder) {
-                holder.container.removeAllViews()
-            } else if (holder is RomViewHolder) {
+            if (holder is RomViewHolder) {
                 holder.cover.dispose()
             }
             super.onViewRecycled(holder)
         }
 
-        override fun getItemCount() = romEntries.size + if (hasNativeAdFooter()) 1 else 0
+        override fun getItemCount() = romEntries.size
     }
 
     private data class PerGameOptions(
@@ -1276,8 +1189,6 @@ class MainActivity : AppCompatActivity() {
 
         private const val VIEW_MODE_LIST = "list"
         private const val VIEW_MODE_GRID = "grid"
-        private const val VIEW_TYPE_ROM = 0
-        private const val VIEW_TYPE_NATIVE_AD = 1
         private const val NO_LOAD_STATE_SLOT = -1
 
         private const val COVER_BASE_URL =
