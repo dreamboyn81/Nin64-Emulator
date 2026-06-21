@@ -23,6 +23,7 @@ app/src/main/assets/adi-registration.properties
 **/*.a
 
 # Keys / secrets
+keystore.properties
 *.jks
 *.keystore
 *.p12

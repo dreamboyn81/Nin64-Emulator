@@ -1,7 +1,24 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
+val releaseKeystoreProperties = Properties().apply {
+    if (releaseKeystorePropertiesFile.isFile) {
+        releaseKeystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+val releaseKeystorePropertyNames = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+
+fun hasReleaseKeystoreProperties(): Boolean =
+    releaseKeystorePropertyNames.all { !releaseKeystoreProperties.getProperty(it).isNullOrBlank() }
+
+fun releaseKeystoreProperty(name: String): String =
+    releaseKeystoreProperties.getProperty(name)
+        ?: throw GradleException("Missing $name in ${releaseKeystorePropertiesFile.path}")
 
 android {
     namespace = "com.izzy2lost.nin64"
@@ -29,6 +46,17 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKeystoreProperties()) {
+                storeFile = rootProject.file(releaseKeystoreProperty("storeFile"))
+                storePassword = releaseKeystoreProperty("storePassword")
+                keyAlias = releaseKeystoreProperty("keyAlias")
+                keyPassword = releaseKeystoreProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -42,6 +70,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -84,6 +113,24 @@ tasks.register<Exec>("buildMupen64PlusNextAndroid") {
 
 tasks.named("preBuild") {
     dependsOn("buildMupen64PlusNextAndroid")
+}
+
+tasks.matching { it.name in setOf("assembleRelease", "bundleRelease") }.configureEach {
+    doFirst {
+        val missingProperties = releaseKeystorePropertyNames
+            .filter { releaseKeystoreProperties.getProperty(it).isNullOrBlank() }
+        if (missingProperties.isNotEmpty()) {
+            throw GradleException(
+                "Missing release signing properties in ${releaseKeystorePropertiesFile.path}: " +
+                    missingProperties.joinToString(", ")
+            )
+        }
+
+        val keystoreFile = rootProject.file(releaseKeystoreProperty("storeFile"))
+        if (!keystoreFile.isFile) {
+            throw GradleException("Release keystore does not exist: ${keystoreFile.path}")
+        }
+    }
 }
 
 dependencies {
