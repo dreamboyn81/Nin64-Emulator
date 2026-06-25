@@ -103,7 +103,7 @@ class NativeAdPlacement(
             object : NativeAdLoaderCallback {
                 override fun onNativeAdLoaded(nativeAd: NativeAd) {
                     activity.runOnUiThread {
-                        if (activity.isFinishing || activity.isDestroyed) {
+                        if (activity.isFinishing || activity.isDestroyed || !AdsController.areAdsEnabled(activity)) {
                             nativeAd.destroy()
                             return@runOnUiThread
                         }

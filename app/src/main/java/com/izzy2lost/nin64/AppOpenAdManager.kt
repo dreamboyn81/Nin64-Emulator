@@ -26,11 +26,18 @@ object AppOpenAdManager {
         }
 
         isLoadingAd = true
-        AdsController.initialize(context.applicationContext) {
+        val appContext = context.applicationContext
+        AdsController.initialize(appContext) {
             AppOpenAd.load(
                 AdRequest.Builder(AdsController.APP_OPEN_AD_UNIT_ID).build(),
                 object : AdLoadCallback<AppOpenAd> {
                     override fun onAdLoaded(ad: AppOpenAd) {
+                        if (!AdsController.areAdsEnabled(appContext)) {
+                            ad.destroy()
+                            isLoadingAd = false
+                            return
+                        }
+
                         appOpenAd = ad
                         loadTimeMs = SystemClock.elapsedRealtime()
                         isLoadingAd = false
@@ -91,6 +98,13 @@ object AppOpenAdManager {
     }
 
     fun isShowingAd(): Boolean = isShowingAd
+
+    fun clearAd() {
+        appOpenAd?.destroy()
+        appOpenAd = null
+        isLoadingAd = false
+        loadTimeMs = 0L
+    }
 
     private fun isAdAvailable(): Boolean {
         val loadedAd = appOpenAd ?: return false

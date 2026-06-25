@@ -12,7 +12,9 @@ class Nin64Application : Application(), Application.ActivityLifecycleCallbacks {
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(this)
-        AppOpenAdManager.loadAd(this)
+        NoAdsPurchaseManager.refreshEntitlement(this) {
+            AppOpenAdManager.loadAd(this)
+        }
     }
 
     override fun onActivityStarted(activity: Activity) {
@@ -42,7 +44,10 @@ class Nin64Application : Application(), Application.ActivityLifecycleCallbacks {
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-    override fun onActivityResumed(activity: Activity) = Unit
+    override fun onActivityResumed(activity: Activity) {
+        NoAdsPurchaseManager.refreshEntitlement(activity)
+    }
+
     override fun onActivityPaused(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
 

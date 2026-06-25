@@ -28,12 +28,24 @@ object AdsController {
             .getBoolean(PREF_REMOVE_ADS, false)
     }
 
-    fun setAdsRemovedForTesting(context: Context, removed: Boolean) {
+    fun areAdsRemoved(context: Context): Boolean {
+        return !areAdsEnabled(context)
+    }
+
+    fun setAdsRemoved(context: Context, removed: Boolean) {
         context
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(PREF_REMOVE_ADS, removed)
             .apply()
+
+        if (removed) {
+            AppOpenAdManager.clearAd()
+        }
+    }
+
+    fun setAdsRemovedForTesting(context: Context, removed: Boolean) {
+        setAdsRemoved(context, removed)
     }
 
     fun initialize(context: Context, onInitialized: () -> Unit) {

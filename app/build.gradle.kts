@@ -30,8 +30,8 @@ android {
         applicationId = "com.izzy2lost.nin64"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "1.0.0"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -143,6 +143,7 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("io.coil-kt:coil:2.6.0")
     implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.0.1")
+    implementation("com.android.billingclient:billing:9.0.0")
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.tukaani:xz:1.10")
     testImplementation("junit:junit:4.13.2")
