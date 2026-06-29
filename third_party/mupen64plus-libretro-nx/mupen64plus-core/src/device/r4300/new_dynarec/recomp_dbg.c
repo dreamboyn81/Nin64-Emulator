@@ -133,7 +133,7 @@ static void __clear_cache(char* begin, char *end){}
 static int disasm_block[] = {0xa4000040};
 
 #include "osal/preproc.h" //for ALIGN
-ALIGN(4096, static char recomp_dbg_extra_memory[33554432]);
+ALIGN(NEW_DYNAREC_CODE_CACHE_ALIGN, static char recomp_dbg_extra_memory[33554432]);
 
 // Recompile new_dynarec.c with the above redefinitions
 #include "new_dynarec.c"

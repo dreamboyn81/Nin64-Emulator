@@ -46,6 +46,13 @@ target_compile_options(
     $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-DNDEBUG>
 )
 
+target_link_options(
+    nin64_core
+    PRIVATE
+    "-Wl,-z,max-page-size=16384"
+    "-Wl,-z,common-page-size=16384"
+)
+
 target_link_libraries(
     nin64_core
     PRIVATE

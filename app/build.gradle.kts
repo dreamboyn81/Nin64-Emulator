@@ -30,8 +30,8 @@ android {
         applicationId = "com.izzy2lost.nin64"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.0"
+        versionCode = 4
+        versionName = "1.1.0"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -134,7 +134,7 @@ tasks.matching { it.name in setOf("assembleRelease", "bundleRelease") }.configur
 }
 
 dependencies {
-    implementation("com.google.oboe:oboe:1.9.0")
+    implementation("com.google.oboe:oboe:1.10.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.documentfile:documentfile:1.0.1")

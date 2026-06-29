@@ -82,7 +82,7 @@ NIN64_ENABLE_THINLTO ?= 1
 NIN64_ABI_ENABLE_THINLTO := $(NIN64_ENABLE_THINLTO)
 NIN64_C_RELEASE_FLAGS := -O3 -DNDEBUG -fsigned-char -fno-strict-aliasing -fomit-frame-pointer -fvisibility=hidden
 NIN64_CPP_RELEASE_FLAGS := -fvisibility-inlines-hidden
-NIN64_LD_RELEASE_FLAGS := -O3 -Wl,--gc-sections
+NIN64_LD_RELEASE_FLAGS := -O3 -Wl,--gc-sections -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384
 
 ifeq ($(TARGET_ARCH_ABI),x86)
   NIN64_ABI_ENABLE_THINLTO := 0

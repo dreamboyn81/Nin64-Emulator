@@ -8632,7 +8632,7 @@ static void pagespan_ds(void)
 
 /**** Recompiler ****/
 #ifdef HAVE_LIBNX
-ALIGN(4096, char jit_memory[33554432]) __attribute__((section(".text")));
+ALIGN(NEW_DYNAREC_CODE_CACHE_ALIGN, char jit_memory[33554432]) __attribute__((section(".text")));
 #endif
 void new_dynarec_init(void)
 {

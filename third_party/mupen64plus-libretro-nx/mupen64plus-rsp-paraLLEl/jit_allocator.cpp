@@ -36,12 +36,15 @@ Allocator::~Allocator()
 
 static size_t align_page(size_t offset)
 {
-#if defined(__APPLE__) && defined(__aarch64__)
-	size_t pagesize = sysconf(_SC_PAGESIZE) - 1;
+#ifdef _WIN32
+	size_t pagemask = 4095;
 #else
-	size_t pagesize = 4095;
+	static const size_t pagemask = [] {
+		long pagesize = sysconf(_SC_PAGESIZE);
+		return static_cast<size_t>(pagesize > 0 ? pagesize - 1 : 4095);
+	}();
 #endif
-	return (offset + pagesize) & ~size_t(pagesize);
+	return (offset + pagemask) & ~pagemask;
 }
 
 static bool commit_read_write(void *ptr, size_t size)
@@ -59,7 +62,7 @@ static bool commit_execute(void *ptr, size_t size)
 	DWORD old_protect;
 	return VirtualProtect(ptr, align_page(size), PAGE_EXECUTE, &old_protect) != 0;
 #else
-	return mprotect(ptr, size, PROT_EXEC) == 0;
+	return mprotect(ptr, align_page(size), PROT_EXEC) == 0;
 #endif
 }
 
