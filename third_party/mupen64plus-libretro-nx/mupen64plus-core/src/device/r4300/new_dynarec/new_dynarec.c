@@ -48,9 +48,25 @@
 #if !defined(WIN32)
 #ifndef HAVE_LIBNX
 #include <sys/mman.h>
+#include <unistd.h>
 #else
 #include "../../../../../switch/mman.h"
 #endif // HAVE_LIBNX
+#endif
+
+#if !defined(WIN32)
+static int dynarec_mprotect(void *addr, size_t size, int prot)
+{
+#ifndef HAVE_LIBNX
+  const long sys_page_size = sysconf(_SC_PAGESIZE);
+  const uintptr_t page_mask = (uintptr_t) (sys_page_size > 0 ? sys_page_size - 1 : 4095);
+  const uintptr_t start = (uintptr_t) addr & ~page_mask;
+  const uintptr_t end = ((uintptr_t) addr + size + page_mask) & ~page_mask;
+  return mprotect((void *) start, end - start, prot);
+#else
+  return mprotect(addr, size, prot);
+#endif
+}
 #endif
 
 #if defined(RECOMPILER_DEBUG) && !defined(RECOMP_DBG)
@@ -8632,7 +8648,7 @@ static void pagespan_ds(void)
 
 /**** Recompiler ****/
 #ifdef HAVE_LIBNX
-ALIGN(NEW_DYNAREC_CODE_CACHE_ALIGN, char jit_memory[33554432]) __attribute__((section(".text")));
+ALIGN(4096, char jit_memory[33554432]) __attribute__((section(".text")));
 #endif
 void new_dynarec_init(void)
 {
@@ -8683,8 +8699,8 @@ void new_dynarec_init(void)
   close(fd);
 #endif // HAVE_LIBNX
 #elif CACHE_ADDR==FIXED_CACHE_ADDR
-  mprotect ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
-            PROT_READ | PROT_WRITE | PROT_EXEC);
+  dynarec_mprotect((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
+                   PROT_READ | PROT_WRITE | PROT_EXEC);
   base_addr = g_dev.r4300.extra_memory;
   base_addr_rx = base_addr;
 #else /*DYNAMIC_CACHE_ADDR*/
@@ -8695,8 +8711,8 @@ void new_dynarec_init(void)
   base_addr_rx = base_addr;
 #endif
 #elif NEW_DYNAREC == NEW_DYNAREC_ARM
-  mprotect ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
-            PROT_READ | PROT_WRITE | PROT_EXEC);
+  dynarec_mprotect((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
+                   PROT_READ | PROT_WRITE | PROT_EXEC);
   base_addr = g_dev.r4300.extra_memory;
   base_addr_rx = base_addr;
 #else
@@ -8706,8 +8722,8 @@ void new_dynarec_init(void)
   assert(res!=0);
   base_addr = base_addr_rx = (void*)g_dev.r4300.extra_memory;
 #else
-  mprotect ((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
-            PROT_READ | PROT_WRITE | PROT_EXEC);
+  dynarec_mprotect((u_char *)g_dev.r4300.extra_memory, 1<<TARGET_SIZE_2,
+                   PROT_READ | PROT_WRITE | PROT_EXEC);
   base_addr = g_dev.r4300.extra_memory;
   base_addr_rx = base_addr;
 #endif
@@ -8773,7 +8789,7 @@ void new_dynarec_cleanup(void)
   #elif NEW_DYNAREC == NEW_DYNAREC_ARM64 && CACHE_ADDR!=FIXED_CACHE_ADDR
     if (munmap (base_addr_rx, 1<<TARGET_SIZE_2) < 0) {DebugMessage(M64MSG_ERROR, "munmap() failed");}
   #else
-    mprotect(base_addr, 1<<TARGET_SIZE_2, PROT_READ | PROT_WRITE);
+    dynarec_mprotect(base_addr, 1<<TARGET_SIZE_2, PROT_READ | PROT_WRITE);
   #endif
 #endif
 #ifdef ROM_COPY

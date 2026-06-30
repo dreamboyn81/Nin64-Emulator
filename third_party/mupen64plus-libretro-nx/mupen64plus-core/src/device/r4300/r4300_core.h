@@ -181,7 +181,7 @@ struct r4300_core
     /* FIXME: better put that near linkage_arm code
      * to help generate call beyond the +/-32MB range.
      */
-    ALIGN(NEW_DYNAREC_CODE_CACHE_ALIGN, char extra_memory[33554432]);
+    ALIGN(4096, char extra_memory[33554432]);
     struct new_dynarec_hot_state new_dynarec_hot_state;
 #endif /* NEW_DYNAREC */
 
