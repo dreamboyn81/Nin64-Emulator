@@ -2,6 +2,10 @@
 
 A Nintendo 64 emulator for Android, powered by [Mupen64Plus-Next](https://github.com/libretro/mupen64plus-libretro-nx) via the libretro API.
 
+<a href="https://play.google.com/store/apps/details?id=com.izzy2lost.nin64&pcampaignid=web_share">
+  <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80"/>
+</a>
+
 ## Features
 
 - **Mupen64Plus-Next libretro core** — hardware-accelerated N64 emulation via GLES3
